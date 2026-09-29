@@ -1,0 +1,16 @@
+{
+  "name": "phantom-pay-stage-2",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "PhantomPay stage 2 - core ledger service plus responsive web UI (zero-dependency Node.js)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
