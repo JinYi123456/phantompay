@@ -1,0 +1,16 @@
+{
+  "name": "phantom-pay-stage-1",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "PhantomPay stage 1 - core double-entry ledger service (zero-dependency Node.js)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

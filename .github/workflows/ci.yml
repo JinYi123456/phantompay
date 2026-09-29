@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Test every stage
+        run: |
+          set -e
+          for d in stage-1 stage-2 stage-3 stage-4; do
+            if [ -f "$d/package.json" ]; then
+              echo "::group:: $d"
+              (cd "$d" && npm test)
+              echo "::endgroup::"
+            fi
+          done
