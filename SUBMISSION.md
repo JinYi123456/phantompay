@@ -54,7 +54,15 @@ Upload to YouTube (unlisted is fine if public is not possible) or any
 hosting that serves a **public link** the form can accept. Title suggestion:
 `PhantomPay — Autonomous Ledger & Settlement Factory (lablab.ai Dark Factory)`.
 
-## 3. Submit the lablab.ai form
+## 3. Explain the collaboration (BAND hacker-guide format)
+
+`FACTORY.md` §8 already answers the guide's four required questions in this
+exact order — crew, @mention routing, one typical flow, and the delete test.
+When the form (or a Discord pitch) asks "explain your agent collaboration",
+paste or paraphrase that section; do not improvise a new story that could
+drift out of sync with the room export.
+
+## 4. Submit the lablab.ai form
 
 Have these ready before opening the form:
 
@@ -78,7 +86,7 @@ Have these ready before opening the form:
   defects) — judges score 50% Factory / 25% App / 25% Agent Teamwork, and
   these two sections are exactly that story.
 
-## 4. Final self-audit against the rules (5 minutes)
+## 5. Final self-audit against the rules (5 minutes)
 
 - [ ] Every stage folder: `npm install` (no-op, zero deps) && `npm test`
       green && `npm start` serves `/health`.

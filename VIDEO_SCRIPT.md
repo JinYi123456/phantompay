@@ -20,6 +20,11 @@ npm start                     # leave it running
 Open a second terminal for `curl`s, and a browser at http://localhost:8080.
 Also open `FACTORY.md` and `factory/room-export.json`.
 
+**Keep execution events ON while recording Take A.** Do not pass `emit=()` to
+any seat's adapter — BAND posts every tool call, thought and finding to the
+room timeline, and that activity is required evidence that real agent work
+happened. A chat-only room weakens the demo.
+
 ## Take B — product screen (2–2.5 min)
 
 1. **Cold start (0:00–0:25).** Fresh terminal, `npm test` in `stage-4/` —

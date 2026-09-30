@@ -149,3 +149,43 @@ Recorded instances from this run (full messages in the room export):
 
 The band's output is exactly the four stage folders, the tests inside them,
 and nothing else: every file traces to a handoff in the room.
+
+## 8. The collaboration, in the hacker guide's submission format
+
+BAND's hacker guide asks every submission to explain the collaboration in
+four short answers. Here they are for this factory:
+
+- **The crew.** Four seats, each a separate BAND agent identity with its own
+  generic mandate (§1 table): Architect (long-context planner), Implementer
+  (coding model), Reviewer (second-opinion model, adversarial read), Verifier
+  (separate clean checkout, cold-room run). No seat owns product detail; all
+  product detail lives in dispatch messages.
+- **Who talks to whom.** The human @mentions only the Architect per stage.
+  The Architect's plan goes to the Implementer; the Implementer hands off to
+  the Reviewer; only a Reviewer APPROVE reaches the Verifier; the Verifier's
+  verdict comes back to the human for the accept decision. Nobody skips a
+  hop: the REJECTs at seq 19 and seq 84 went straight back to the
+  Implementer, and nothing shipped past a gate without its verdict message.
+  The Reviewer deliberately runs a different model family than the
+  Implementer so the read-gate and the run-gate fail differently.
+- **One typical flow (stage 1).**
+
+  ```
+  dispatch (human, seq 4)
+    → @Architect plan (seq 6)
+    → @Implementer code + tests + transcripts (seq 16)
+    → @Reviewer REJECT, 2 numbered findings (seq 19)
+    → @Implementer fix, 30/30 (seq 23)
+    → @Reviewer APPROVE (seq 26)
+    → @Verifier cold-room run (seq 33 VERIFIED, 30 tests)
+    → human accepts (seq 35)
+  ```
+
+  Stages 2–4 repeat the shape (dispatch/verdict seqs in §7); the complete
+  41-message export is [`factory/room-export.json`](factory/room-export.json).
+- **What breaks without the room (the delete test).** The handoff chain *is*
+  the process: without the BAND room there is no review that re-derives its
+  findings, no clean-checkout verification, no typed verdicts, and no
+  traceability from commits `5561a88…c22ba7c` back to the messages that
+  certified them — the folders would just be unverified code that someone
+  claims works.
