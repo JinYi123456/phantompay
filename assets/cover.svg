@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="PhantomPay — Autonomous Ledger &amp; Settlement Factory">
+  <!-- PhantomPay cover, 1200x630 (og-image size). assets/cover.png is generated from this design by tools/gen-cover.js (zero dependencies). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0f1a"/>
+      <stop offset="1" stop-color="#151d33"/>
+    </linearGradient>
+    <pattern id="dots" width="60" height="60" patternUnits="userSpaceOnUse">
+      <circle cx="30" cy="30" r="1.4" fill="#8fa3c8" opacity="0.09"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+
+  <!-- processing ring: the factory (blue) with the verifier's green approval arc -->
+  <circle cx="600" cy="265" r="150" fill="none" stroke="#4f8cff" stroke-width="10"/>
+  <path d="M 675 135.1 A 150 150 0 0 1 675 394.9" fill="none" stroke="#2ecc71" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="600" cy="265" r="34" fill="#4f8cff"/>
+
+  <!-- the four seats -->
+  <rect x="591" y="78"  width="18" height="18" rx="4" fill="#e8eefc"/>
+  <rect x="591" y="434" width="18" height="18" rx="4" fill="#e8eefc"/>
+  <rect x="413" y="256" width="18" height="18" rx="4" fill="#e8eefc"/>
+  <rect x="769" y="256" width="18" height="18" rx="4" fill="#e8eefc"/>
+
+  <text x="600" y="478" text-anchor="middle" fill="#f4f7ff"
+        font-family="ui-sans-serif, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="84" font-weight="800" letter-spacing="-2">PhantomPay</text>
+  <text x="600" y="550" text-anchor="middle" fill="#93a4c8"
+        font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace"
+        font-size="24" letter-spacing="6">AUTONOMOUS LEDGER &amp; SETTLEMENT FACTORY</text>
+  <text x="600" y="590" text-anchor="middle" fill="#5b6c93"
+        font-family="ui-monospace, 'Cascadia Mono', Consolas, monospace"
+        font-size="18" letter-spacing="3">PHANTOM FOUNDRY · POCKETFUL TRACK · DARK FACTORY · 76 TESTS GREEN</text>
+
+  <rect x="14" y="14" width="1172" height="602" rx="10" fill="none" stroke="#2a3550" stroke-width="2"/>
+</svg>

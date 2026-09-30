@@ -1,4 +1,4 @@
-# PhantomPay stage 3 — clean build with zero network access.
+# PhantomPay stage 4 — clean build with zero network access.
 # There are no dependencies to install: the base image plus the source is enough.
 FROM node:24-alpine
 

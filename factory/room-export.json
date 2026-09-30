@@ -1,0 +1,134 @@
+{
+  "format": "band-room-export@1",
+  "generatedBy": "BAND Desktop — Export room to JSON",
+  "exportedAt": "2026-09-30T02:15:00.000Z",
+  "room": {
+    "name": "PhantomPay — Autonomous Ledger & Settlement Factory",
+    "createdAt": "2026-09-29T10:30:00.000Z",
+    "kind": "BAND Desktop room, coding-agent plugin",
+    "seats": [
+      { "name": "Architect", "runtime": "Claude Code (BAND coding-agent plugin)", "model": "Featherless-hosted long-context model", "mandate": "mandates/architect.md" },
+      { "name": "Implementer", "runtime": "Claude Code (BAND coding-agent plugin)", "model": "Featherless-hosted coding model", "mandate": "mandates/implementer.md" },
+      { "name": "Reviewer", "runtime": "Claude Code (BAND coding-agent plugin)", "model": "Second-opinion model (different family from Implementer)", "mandate": "mandates/reviewer.md" },
+      { "name": "Verifier", "runtime": "Claude Code (BAND coding-agent plugin), separate clean checkout", "model": "Same model family as Implementer", "mandate": "mandates/verifier.md" },
+      { "name": "human", "runtime": "BAND Desktop client", "model": null, "mandate": null }
+    ],
+    "note": "One message object per conversation message, in room order. The mandates carry process only — zero task detail; all task detail entered the room through human dispatch messages."
+  },
+  "conventions": {
+    "seq": "Room-global event-stream sequence number (agent turns, tool runs, file events and messages share one stream). This export contains the conversation messages only; seq values are the stream positions at which those messages were posted.",
+    "messageCount": "Counts conversation messages in this export (seat + human + system)."
+  },
+  "stats": {
+    "messageCount": 41,
+    "humanMessages": 8,
+    "humanMessagesBreakdown": "8 = 4 stages x (1 task dispatch + 1 accept decision). These are the only messages the human sent.",
+    "perSeatMessages": { "Architect": 5, "Implementer": 12, "Reviewer": 6, "Verifier": 9, "human": 8, "system": 1 },
+    "verdicts": { "REJECT": 2, "APPROVE": 4, "VERIFIED": 4, "FAILED": 0 }
+  },
+  "perStage": [
+    { "stage": 1, "window": "2026-09-29T10:40Z → 11:32Z", "wallClock": "~50 min", "dispatchSeq": 4, "verdictSeq": 33, "tests": 30, "review": "1 REJECT, 1 APPROVE", "commit": "5561a88 (initial stage-1 work in 6e252c3)" },
+    { "stage": 2, "window": "2026-09-29T11:45Z → 12:19Z", "wallClock": "~35 min", "dispatchSeq": 37, "verdictSeq": 61, "tests": 31, "review": "1 APPROVE", "commit": "4a27480" },
+    { "stage": 3, "window": "2026-09-29T13:00Z → 14:00Z", "wallClock": "~60 min", "dispatchSeq": 65, "verdictSeq": 92, "tests": 53, "review": "1 REJECT, 1 APPROVE", "commit": "88b8426" },
+    { "stage": 4, "window": "2026-09-29T14:20Z → 15:25Z", "wallClock": "~65 min", "dispatchSeq": 96, "verdictSeq": 118, "tests": 76, "review": "1 APPROVE", "commit": "c22ba7c" }
+  ],
+  "commitNote": "Stages 1 and 2 were committed immediately after their accept decisions (6e252c3 at 12:10Z, 4a27480 at 12:25Z). The frozen per-stage folders (5561a88, 88b8426, c22ba7c) were committed the following morning after the human consolidated each stage into its own buildable copy.",
+  "messages": [
+    {
+      "seq": 1,
+      "at": "2026-09-29T10:30:00.000Z",
+      "from": "system",
+      "type": "system",
+      "text": "Room 'PhantomPay' created. Four coding-agent seats attached, each pointed at its standing instruction in mandates/: architect.md, implementer.md, reviewer.md, verifier.md. The mandates define process only — no product, endpoint or task detail; all task detail enters this room exclusively through human dispatch messages. The Verifier seat runs against a separate clean checkout."
+    },
+
+    { "seq": 4, "at": "2026-09-29T10:40:00.000Z", "from": "human", "type": "dispatch", "stage": 1, "text": "Stage 1 — build the ledger core service in stage-1/: double-entry accounts with signed balances in BigInt minor units; direction-aware postings; house accounts may go negative, user accounts never. Transfers idempotent by externalId + request fingerprint, with the replay decision made BEFORE any funds check. Batch transfers all-or-nothing. Optimistic concurrency via expectedSourceVersion. HTTP surface: /health, /metrics, /accounts, /transfers. Zero runtime dependencies. Ship when the suite is green." },
+
+    { "seq": 6, "at": "2026-09-29T10:45:12.000Z", "from": "Architect", "type": "plan", "stage": 1, "text": "Stage-1 plan locked. Requirements: (1) double-entry engine, signed balances, BigInt minor units; (2) direction-aware postings, per-account negative-balance policy; (3) idempotency: externalId + fingerprint, replay decided before funds; (4) batches all-or-nothing; (5) optimistic expectedSourceVersion locking; (6) HTTP surface + /health + /metrics, zero runtime deps. Acceptance checklist: value conservation across randomized transfer graphs; concurrent same-source transfers never oversell; every endpoint replay returns the original result plus a replay marker; a refused batch leaves zero partial postings; clean-container boot with no outbound network. Riskiest items first: invariants before HTTP plumbing." },
+
+    { "seq": 9, "at": "2026-09-29T10:53:40.000Z", "from": "Implementer", "type": "note", "stage": 1, "text": "Working the checklist top-down. Value conservation and idempotency land first: the engine is a pure module (BigInt minor units, append-only journal, per-currency scale map), HTTP stays a thin layer on top. Will hand off with command transcripts per the mandate." },
+
+    { "seq": 16, "at": "2026-09-29T11:07:05.000Z", "from": "Implementer", "type": "handoff", "stage": 1, "text": "Stage-1 handoff, requesting review. Items 1-6 implemented; 24 tests so far. Files: lib/ledger.js, lib/http.js, server.js, tests/.",
+      "evidence": { "commands": ["node --test tests/  → 24/24 pass (1.4s)", "node server.js && curl -s localhost:8080/health → ok", "docker build -t stage1 . && docker run --network none → boots, /health responds"], "transcripts": "handoff/stage-1/" } },
+
+    { "seq": 19, "at": "2026-09-29T11:14:30.000Z", "from": "Reviewer", "type": "review", "stage": 1, "verdict": "REJECT", "text": "REJECT — 2 blocking findings. [1] Batch transfers validate funds per item and then commit items serially, so a batch whose later items draw on the same source account can over-commit that account within a single accepted request: the per-item check passes because earlier commits in the same request already moved the money. Exhibit: batch [{A→B 100},{A→C 50}] against a source holding 120 commits both legs. Required: validate the entire batch first with a cumulative per-account funds simulation; commit only if every item passes; otherwise commit nothing. [2] Coverage gap: no test drives concurrent same-source transfers, so oversell is not proven impossible. Add that test; do not skip it.",
+      "findings": ["batch over-commit within one accepted request (validate-then-commit-serially)", "missing concurrent same-source oversell test"] },
+
+    { "seq": 23, "at": "2026-09-29T11:22:15.000Z", "from": "Implementer", "type": "handoff", "stage": 1, "text": "Both findings addressed. The batch path now validates everything first against a cumulative per-account funds simulation and only then commits — all-or-nothing holds under every interleaving. New tests: concurrent same-source storm (32 parallel transfers from one funded account), batch cumulative over-commit refusal, refused batch leaves zero partial postings. Full suite 30/30.",
+      "evidence": { "commands": ["node --test tests/  → 30/30 pass (1.5s)"], "transcripts": "handoff/stage-1-fix/" } },
+
+    { "seq": 26, "at": "2026-09-29T11:27:48.000Z", "from": "Reviewer", "type": "review", "stage": 1, "verdict": "APPROVE", "text": "APPROVE. Re-derived finding 1 independently: the validate-first simulation closes the over-commit path, and the concurrent storm test exercises the exact interleaving that failed before. Replay-before-funds ordering confirmed in code and covered by tests. Checklist items 1-6 all evidenced. Recommend verification." },
+
+    { "seq": 30, "at": "2026-09-29T11:31:10.000Z", "from": "Verifier", "type": "note", "stage": 1, "text": "Verification run started in my separate clean checkout: fresh clone of the handoff tree, no inherited state, suite runs cold." },
+
+    { "seq": 33, "at": "2026-09-29T11:32:02.000Z", "from": "Verifier", "type": "verify", "stage": 1, "verdict": "VERIFIED", "certifiedTests": 30, "text": "VERIFIED — stage 1. Clean-room cold run: 30/30 pass (1.9s), zero network during boot and run (container run with no external interfaces). Replayed the Reviewer's over-commit exhibit against the fixed build: whole batch refused, journal unchanged. Value conservation held across 10,000 randomized transfer graphs. Certified test count: 30." },
+
+    { "seq": 35, "at": "2026-09-29T11:36:20.000Z", "from": "human", "type": "accept", "stage": 1, "text": "Accept stage 1." },
+
+    { "seq": 37, "at": "2026-09-29T11:45:00.000Z", "from": "human", "type": "dispatch", "stage": 2, "text": "Stage 2 — build a dark, responsive web UI served by the same process over the existing ledger API. No separate frontend build step, no new runtime dependencies. Accounts overview with balances, transfer and batch forms, recent activity. Same pipeline: plan → implement → review → verify. Ship when the suite is green." },
+
+    { "seq": 40, "at": "2026-09-29T11:49:30.000Z", "from": "Architect", "type": "plan", "stage": 2, "text": "Stage-2 plan. Requirements: (1) server-rendered dark UI from the same Node process; (2) accounts overview with signed balances rendered at each currency's scale; (3) transfer + batch forms posting to the existing API; (4) recent activity view; (5) responsive to phone widths; (6) no new runtime deps, no build step. Acceptance checklist: every UI action maps to an existing API call (no ledger logic in the UI); existing 30 tests still pass plus new UI route tests; layouts verified at 320/768/1440px; offline container boot renders the page." },
+
+    { "seq": 44, "at": "2026-09-29T11:55:41.000Z", "from": "Architect", "type": "clarification", "stage": 2, "text": "Answering the implementer's scope question: the UI is a strict client of the stage-1 API. If a UI need seems to require new ledger behavior, stop and flag it instead of extending the ledger — stage scope is frozen by the dispatch." },
+
+    { "seq": 47, "at": "2026-09-29T11:58:12.000Z", "from": "Implementer", "type": "note", "stage": 2, "text": "Understood — UI as pure client. Building views and form handling first (highest risk: double-submits), wiring to the existing endpoints, then route tests." },
+
+    { "seq": 52, "at": "2026-09-29T12:07:26.000Z", "from": "Implementer", "type": "handoff", "stage": 2, "text": "Stage-2 handoff. Views: accounts overview, transfer form with a client-side idempotency key (double-submit guarded), batch form, activity list. Route tests cover rendering, form POST round-trips and the double-submit guard; full suite 31/31.",
+      "evidence": { "commands": ["node --test tests/  → 31/31 pass (1.6s)", "curl -s localhost:8080/ | head → 200 text/html"], "transcripts": "handoff/stage-2/ (incl. 320/768/1440px screenshots)" } },
+
+    { "seq": 55, "at": "2026-09-29T12:12:03.000Z", "from": "Reviewer", "type": "review", "stage": 2, "verdict": "APPROVE", "text": "APPROVE. Confirmed the UI adds no ledger behavior — every action is a call to an existing endpoint, and the double-submit guard reuses the API's idempotency contract rather than inventing its own. Responsive breakpoints evidenced; API error bodies surface verbatim in the failure banner. Recommend verification." },
+
+    { "seq": 58, "at": "2026-09-29T12:17:19.000Z", "from": "Verifier", "type": "note", "stage": 2, "text": "Cold room: fresh checkout, full suite plus page smoke tests over the booted server." },
+
+    { "seq": 61, "at": "2026-09-29T12:19:02.000Z", "from": "Verifier", "type": "verify", "stage": 2, "verdict": "VERIFIED", "certifiedTests": 31, "text": "VERIFIED — stage 2. Clean-room run: 31/31 pass (1.7s). Server boots offline in a container; GET / renders the accounts overview with seeded balances; a transfer driven through the UI form lands in the journal. Certified test count: 31." },
+
+    { "seq": 63, "at": "2026-09-29T12:24:10.000Z", "from": "human", "type": "accept", "stage": 2, "text": "Accept stage 2." },
+
+    { "seq": 65, "at": "2026-09-29T13:00:00.000Z", "from": "human", "type": "dispatch", "stage": 3, "text": "Stage 3 — extend the service: recurring transfers on a built-in scheduler (create/list/pause/resume/delete, due runs execute exactly once, overdue definitions catch up on boot), deposits and withdrawals posting through house counter-accounts, and account statements with time-window filtering and stable cursor paging. All prior guarantees (idempotency, all-or-nothing batches, concurrency) must hold. Ship when the suite is green." },
+
+    { "seq": 68, "at": "2026-09-29T13:05:22.000Z", "from": "Architect", "type": "plan", "stage": 3, "text": "Stage-3 plan. Requirements: (1) recurring transfer definitions + scheduler with exactly-once execution and boot-time catch-up; (2) deposits/withdrawals through the same double-entry engine with house counter-accounts; (3) statements: time-window filter, newest-first, opaque base64url cursor, stable under concurrent writes; (4) currency scale correctness in statements; (5) stages 1-2 behavior frozen — no breaking API changes. Acceptance checklist: a recurring definition never double-runs for the same due tick (including a crash between execute and record); pagination revisits no entry and skips none across concurrent writes; time-window bounds are inclusive at instant precision; full prior suite green plus new tests; offline container boot." },
+
+    { "seq": 71, "at": "2026-09-29T13:10:04.000Z", "from": "Implementer", "type": "note", "stage": 3, "text": "Riskiest first: exactly-once scheduling (the crash-between-execute-and-record window), then statements (paging + time bounds), then deposits/withdrawals, which are plain postings." },
+
+    { "seq": 78, "at": "2026-09-29T13:26:47.000Z", "from": "Implementer", "type": "note", "stage": 3, "text": "Scheduler: due-run execution and run-recording now commit in one journal transaction, so a crash cannot double-run; boot catches up overdue definitions once per missed tick. Statements: cursor encodes (createdAt, id) of the last entry; time-window bounds in place. Deposits/withdrawals wired. Writing tests." },
+
+    { "seq": 82, "at": "2026-09-29T13:37:31.000Z", "from": "Implementer", "type": "handoff", "stage": 3, "text": "Stage-3 handoff. New: /schedules CRUD, /deposits, /withdrawals, /statements. 49 tests — including scheduler crash-injection (kill between execute and record, restart, assert a single run), a concurrent-write pagination sweep, and time-window edge cases.",
+      "evidence": { "commands": ["node --test tests/  → 49/49 pass (2.3s)"], "transcripts": "handoff/stage-3/" } },
+
+    { "seq": 84, "at": "2026-09-29T13:43:09.000Z", "from": "Reviewer", "type": "review", "stage": 3, "verdict": "REJECT", "text": "REJECT — 1 blocking finding. The statement time-window filter compares ISO timestamp strings lexicographically. '2026-01-01T00:00:00.000Z' vs '2026-01-01T00:00:00Z': string comparison ranks the millisecond form before the bare form, so an inclusive 'from' bound silently excludes entries stamped at exactly midnight when the two forms occur together — at millisecond precision an inclusive bound becomes exclusive. Required: parse both bounds and entry timestamps as instants and compare numerically. Add a regression test at a midnight boundary using both timestamp forms on both bounds.",
+      "findings": ["statement time-window filter compares ISO strings instead of instants (ms-precision inclusive/exclusive bug)"] },
+
+    { "seq": 88, "at": "2026-09-29T13:52:55.000Z", "from": "Implementer", "type": "handoff", "stage": 3, "text": "Fixed: bounds and entry times are parsed to instants and compared numerically — the two ISO forms are the same instant. Added a midnight-boundary regression test with mixed .000Z and bare-Z stamps on both bounds. Full suite 53/53.",
+      "evidence": { "commands": ["node --test tests/  → 53/53 pass (2.4s)"], "transcripts": "handoff/stage-3-fix/" } },
+
+    { "seq": 90, "at": "2026-09-29T13:57:14.000Z", "from": "Reviewer", "type": "review", "stage": 3, "verdict": "APPROVE", "text": "APPROVE. The instant comparison removes the string-form hazard entirely; the new boundary test pins both forms against both bounds. Blast radius confined to statement filtering — scheduler exactly-once evidence (crash-injection transcript) re-checked and unaffected. Recommend verification." },
+
+    { "seq": 91, "at": "2026-09-29T13:59:05.000Z", "from": "Verifier", "type": "note", "stage": 3, "text": "Cold room: fresh checkout of the fixed tree; full suite plus the boundary test." },
+
+    { "seq": 92, "at": "2026-09-29T14:00:11.000Z", "from": "Verifier", "type": "verify", "stage": 3, "verdict": "VERIFIED", "certifiedTests": 53, "text": "VERIFIED — stage 3. Clean-room cold run: 53/53 pass (2.4s). Independently reproduced the rejected string-compare bug against the pre-fix tree (the two midnight stamps diverged) and confirmed the fixed tree unifies them. Scheduler crash-injection replayed: exactly-once holds. Certified test count: 53." },
+
+    { "seq": 94, "at": "2026-09-29T14:04:33.000Z", "from": "human", "type": "accept", "stage": 3, "text": "Accept stage 3." },
+
+    { "seq": 96, "at": "2026-09-29T14:20:00.000Z", "from": "human", "type": "dispatch", "stage": 4, "text": "Stage 4 — final stage. Payment lifecycle on top of the ledger: authorize with an escrow hold per currency, capture full/partial (multiple captures until exhausted), void, refund full/partial, and expiry of uncaptured authorizations releasing the hold. Plus a tamper-evident audit trail: hash-chained entries (SHA-256 over canonical JSON, sorted keys), immutable, with a public verify endpoint that reports the first broken position. All prior guarantees hold. Ship when the suite is green." },
+
+    { "seq": 99, "at": "2026-09-29T14:25:18.000Z", "from": "Architect", "type": "plan", "stage": 4, "text": "Stage-4 plan. Requirements: (1) authorize → escrow hold per currency via house accounts; (2) capture full/partial, multiple captures until exhaustion; (3) void releases the hold; (4) refund posts captured value back; (5) uncaptured authorizations expire by TTL, releasing holds — clock must be injectable so expiry is deterministically testable; (6) audit chain: every mutation appends a SHA-256 entry over canonical JSON (keys sorted recursively), entries immutable, /audit/verify recomputes the chain and reports the first broken position; (7) operation-level idempotency across all payment endpoints. Acceptance checklist: no payment operation creates or destroys value outside the double-entry engine; every hold is released by exactly one of capture/void/expiry (no leaks); chain verification detects a tampered entry at the right position; full prior suite green; offline boot." },
+
+    { "seq": 102, "at": "2026-09-29T14:33:44.000Z", "from": "Implementer", "type": "note", "stage": 4, "text": "Escrow holds in place: authorize debits the source into house:escrow:<currency>; capture moves escrow→destination proportionally to the captured amount; void and expiry reverse the hold. Clock injected via an engine option; the expiry sweep runs on first touch of an authorization. Audit writer appends hash-chained entries (canonical JSON, keys sorted recursively). Writing the payment endpoint tests." },
+
+    { "seq": 106, "at": "2026-09-29T14:47:58.000Z", "from": "Implementer", "type": "handoff", "stage": 4, "text": "Stage-4 handoff. New: /payments (authorize/capture/void/refund), /audit, /audit/verify. 74 tests — partial captures to exhaustion, double-capture refusal, a hold-leak property test (every authorization ends in exactly one terminal state), refund conservation, tamper detection at first/middle/last chain positions, and TTL expiry with an injected clock.",
+      "evidence": { "commands": ["node --test tests/  → 74/74 pass (2.8s)"], "transcripts": "handoff/stage-4/" } },
+
+    { "seq": 109, "at": "2026-09-29T14:55:21.000Z", "from": "Reviewer", "type": "review", "stage": 4, "verdict": "APPROVE", "text": "APPROVE. Verified the value-conservation argument across the hold matrix — authorize, partial capture, void and refund all net to zero outside user accounts. The hold-leak property test is the right invariant: every authorization's terminal state is accounted for. /audit/verify pinpoints the first broken position in all three tamper exhibits. Recommend verification." },
+
+    { "seq": 112, "at": "2026-09-29T15:03:37.000Z", "from": "Verifier", "type": "note", "stage": 4, "text": "First cold run flagged one finding before I could certify: the expiry test bound the clock at module load, so its outcome depends on when the suite starts rather than on the injected clock — it would not reproduce deterministically in a cold container run. Not a product defect; a test determinism defect. Implementer is reworking the test to drive the clock explicitly; I will re-run from scratch in a fresh checkout." },
+
+    { "seq": 113, "at": "2026-09-29T15:06:50.000Z", "from": "Implementer", "type": "handoff", "stage": 4, "text": "Reworked: expiry tests now advance the injected clock explicitly — no wall-clock dependency anywhere in the suite — and an expired-at-boundary case was added. Full suite 76/76, fully deterministic.",
+      "evidence": { "commands": ["node --test tests/  → 76/76 pass (2.9s), run twice, identical result"], "transcripts": "handoff/stage-4-fix/" } },
+
+    { "seq": 116, "at": "2026-09-29T15:18:26.000Z", "from": "Verifier", "type": "note", "stage": 4, "text": "Fresh clean-room re-run of the fixed tree: 76/76, deterministic across two consecutive cold runs (same order, same result). Tamper exhibits still detected at the correct positions." },
+
+    { "seq": 118, "at": "2026-09-29T15:25:09.000Z", "from": "Verifier", "type": "verify", "stage": 4, "verdict": "VERIFIED", "certifiedTests": 76, "text": "VERIFIED — stage 4. Clean-room cold runs (x2): 76/76 pass (2.9s) with the clock-driven expiry suite. Hold-leak property held across 5,000 randomized lifecycle paths; the audit chain verified intact and correctly flagged each injected tamper. Certified test count: 76. The band's build is complete: stages 1-4 all verified." },
+
+    { "seq": 120, "at": "2026-09-29T15:29:44.000Z", "from": "human", "type": "accept", "stage": 4, "text": "Accept stage 4. Factory run complete — four stages dispatched, planned, implemented, reviewed, verified and accepted, with exactly two human messages per stage." }
+  ]
+}

@@ -1,7 +1,7 @@
 services:
   phantom-pay:
     build: .
-    image: phantom-pay:stage-3
+    image: phantom-pay:stage-4
     ports:
       - "8080:8080"
     healthcheck:
