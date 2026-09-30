@@ -1,0 +1,16 @@
+{
+  "name": "phantom-pay-stage-3",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "PhantomPay stage 3 - scheduled transfers, deposits/withdrawals and statements (zero-dependency Node.js)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
