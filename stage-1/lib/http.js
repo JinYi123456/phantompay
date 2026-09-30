@@ -142,7 +142,18 @@ function dispatch({ router, res, req, url, requestId, context }) {
     });
     const status = result && result.__status ? result.__status : 200;
     const headers = result && result.__headers ? result.__headers : {};
-    const payload = result && result.__status ? result.payload : result;
+    let payload = result && result.__status ? result.payload : result;
+    if (typeof payload === 'string') {
+      // Raw text payloads (e.g. Prometheus metrics) are served verbatim.
+      res.writeHead(status, {
+        'content-type': 'text/plain; charset=utf-8',
+        'content-length': Buffer.byteLength(payload),
+        'access-control-allow-origin': '*',
+        ...headers,
+      });
+      res.end(payload);
+      return;
+    }
     sendJson(res, status, payload === undefined ? {} : payload, headers);
   })().catch((err) => {
     if (!res.headersSent) sendError(res, err, requestId);

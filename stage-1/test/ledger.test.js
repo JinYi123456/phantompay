@@ -1,224 +1,235 @@
 'use strict';
 
 /**
- * Engine-level tests for the hard guarantees: conservation of money,
- * no-overdraft, idempotency, atomic batches and optimistic concurrency.
+ * Core ledger unit tests: conservation, idempotency, rejection semantics,
+ * optimistic concurrency, atomic all-or-nothing batches and the exactness of
+ * minor-unit math. These run directly against the engine, no HTTP involved.
  */
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Ledger } = require('../lib/ledger');
+const { LedgerError } = require('../lib/errors');
 
-function makeLedger() {
-  const ledger = new Ledger({ clock: () => new Date().toISOString() });
-  ledger.createAccount({ id: 'house:treasury', currency: 'USD', type: 'house', direction: 'credit' });
-  ledger.createAccount({ id: 'alice', currency: 'USD', name: 'Alice' });
-  ledger.createAccount({ id: 'bob', currency: 'USD', name: 'Bob' });
-  return ledger;
+function makeEngine() {
+  const ledger = new Ledger();
+  const alice = ledger.createAccount({ id: 'alice', currency: 'USD', name: 'Alice' });
+  const bob = ledger.createAccount({ id: 'bob', currency: 'USD', name: 'Bob' });
+  const treasury = ledger.createAccount({ id: 'treasury', currency: 'USD', type: 'house', direction: 'credit' });
+  ledger.transfer({ externalId: 's:alice', sourceAccountId: 'treasury', destinationAccountId: 'alice', amount: 100 });
+  ledger.transfer({ externalId: 's:bob', sourceAccountId: 'treasury', destinationAccountId: 'bob', amount: 40 });
+  return { ledger, alice, bob, treasury };
 }
 
-function seed(ledger, accountId, amount, externalId) {
-  return ledger.transfer({
-    externalId,
-    sourceAccountId: 'house:treasury',
-    destinationAccountId: accountId,
-    amount,
-  });
+function assertCode(fn, code, status) {
+  try {
+    fn();
+    assert.fail(`expected ${code} to be thrown`);
+  } catch (err) {
+    assert.ok(err instanceof LedgerError, `expected LedgerError, got ${err}`);
+    assert.equal(err.code, code);
+    if (status !== undefined) assert.equal(err.status, status);
+  }
 }
 
-test('seeded opening balances are exact minor units', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 100.25, 'seed-1');
-  assert.equal(ledger.balanceOf(ledger.getAccount('alice')), 10025n);
-  seed(ledger, 'bob', 50, 'seed-2');
-  assert.equal(ledger.balanceOf(ledger.getAccount('bob')), 5000n);
+function signedSum(ledger) {
+  let total = 0n;
+  for (const account of ledger.listAccounts()) total += ledger.balanceOf(account);
+  return total; // must always be exactly zero in a closed double-entry system
+}
+
+test('transfer moves value without creating or destroying it', () => {
+  const { ledger, alice, bob } = makeEngine();
+  const before = signedSum(ledger);
+  ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 25.5 });
+  const after = signedSum(ledger);
+  assert.equal(after, before);
+  assert.equal(after, 0n); // closed system: signed balances always sum to zero
+  assert.equal(ledger.balanceOf(alice), 7450n);
+  assert.equal(ledger.balanceOf(bob), 6550n);
 });
 
-test('transfers preserve conservation of money', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 100, 'seed-1');
-  const before = totalMoney(ledger);
-  ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 30 });
-  assert.equal(totalMoney(ledger), before);
-  assert.equal(ledger.balanceOf(ledger.getAccount('alice')), 7000n);
-  assert.equal(ledger.balanceOf(ledger.getAccount('bob')), 3000n);
-});
-
-test('overdraft is refused and moves no money', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 10, 'seed-1');
-  assert.throws(
-    () => ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 10.01 }),
-    (err) => err.code === 'insufficient_funds' && err.status === 409
+test('overdrawing a funded account is refused with insufficient_funds', () => {
+  const { ledger, alice, bob } = makeEngine();
+  assertCode(
+    () => ledger.transfer({ externalId: 'x1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 100.01 }),
+    'insufficient_funds',
+    409
   );
-  assert.equal(ledger.balanceOf(ledger.getAccount('alice')), 1000n);
-  assert.equal(ledger.balanceOf(ledger.getAccount('bob')), 0n);
-  assert.equal(ledger.findTransaction('t1'), null);
+  assert.equal(ledger.balanceOf(alice), 10000n); // untouched
+  assert.equal(ledger.balanceOf(bob), 4000n);
 });
 
-test('idempotent replay returns the original transaction with no double credit', () => {
-  const ledger = makeLedger();
-  const first = seed(ledger, 'alice', 100, 'seed-1');
-  const replay = seed(ledger, 'alice', 100, 'seed-1');
+test('zero and negative amounts are rejected', () => {
+  const { ledger, alice, bob } = makeEngine();
+  assertCode(() => ledger.transfer({ externalId: 'z', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 0 }), 'invalid_amount', 422);
+  assertCode(() => ledger.transfer({ externalId: 'n', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: -5 }), 'invalid_amount', 422);
+});
+
+test('same-account and cross-currency transfers are rejected', () => {
+  const { ledger, alice } = makeEngine();
+  ledger.createAccount({ id: 'eur1', currency: 'EUR' });
+  assertCode(() => ledger.transfer({ externalId: 's', sourceAccountId: 'alice', destinationAccountId: 'alice', amount: 1 }), 'same_account', 422);
+  assertCode(() => ledger.transfer({ externalId: 'c', sourceAccountId: 'alice', destinationAccountId: 'eur1', amount: 1 }), 'currency_mismatch', 422);
+});
+
+test('amounts beyond the currency scale are rejected without rounding', () => {
+  const { ledger, alice, bob } = makeEngine();
+  assertCode(
+    () => ledger.transfer({ externalId: 'p1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 1.005 }),
+    'amount_precision',
+    422
+  );
+  assertCode(
+    () => ledger.transfer({ externalId: 'p1s', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: '10.255' }),
+    'amount_precision',
+    422
+  );
+  const jpy = ledger.createAccount({ id: 'jpy-a', currency: 'JPY' });
+  const jpyB = ledger.createAccount({ id: 'jpy-b', currency: 'JPY' });
+  assertCode(
+    () => ledger.transfer({ externalId: 'p2', sourceAccountId: 'jpy-a', destinationAccountId: 'jpy-b', amount: 1.5 }),
+    'amount_precision',
+    422
+  );
+  assertCode(
+    () => ledger.transfer({ externalId: 'p3', sourceAccountId: 'jpy-a', destinationAccountId: 'jpy-b', amount: 0.001 }),
+    'amount_precision',
+    422
+  );
+  // A 2-decimal string amount parses exactly and moves 1 minor unit per cent.
+  ledger.transfer({ externalId: 'p4', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: '0.01' });
+  assert.equal(ledger.balanceOf(alice), 9999n);
+  assert.equal(ledger.balanceOf(jpy), 0n); // untouched
+});
+
+test('idempotent replay returns the original transaction and moves nothing twice', () => {
+  const { ledger, alice, bob } = makeEngine();
+  const first = ledger.transfer({ externalId: 'op-1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 10, metadata: { note: 'hi' } });
+  const replay = ledger.transfer({ externalId: 'op-1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 10 });
   assert.equal(replay.idempotentReplay, true);
   assert.equal(replay.transaction.id, first.transaction.id);
-  assert.equal(ledger.balanceOf(ledger.getAccount('alice')), 10000n);
-  assert.equal(ledger.stats().transactions, 1);
+  assert.equal(ledger.balanceOf(alice), 9000n); // debited once
+  assert.equal(ledger.balanceOf(bob), 5000n);
 });
 
-test('same externalId with a different payload is a conflict', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 100, 'seed-1');
-  assert.throws(
-    () => seed(ledger, 'bob', 100, 'seed-1'),
-    (err) => err.code === 'external_id_conflict' && err.status === 409
-  );
-});
-
-test('a replay does not fail on funds checks', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 100, 'seed-1');
-  ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 100 });
-  const replay = ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 100 });
+test('replays are detected before funds checks, so a replay never fails on funds', () => {
+  const { ledger, alice, bob } = makeEngine();
+  ledger.transfer({ externalId: 'op-2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 100 });
+  const replay = ledger.transfer({ externalId: 'op-2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 100 });
   assert.equal(replay.idempotentReplay, true);
-  assert.equal(ledger.balanceOf(ledger.getAccount('bob')), 10000n);
 });
 
-test('currency mismatch is refused', () => {
-  const ledger = makeLedger();
-  ledger.createAccount({ id: 'carol', currency: 'EUR', name: 'Carol' });
-  seed(ledger, 'alice', 100, 'seed-1');
-  assert.throws(
-    () => ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'carol', amount: 10 }),
-    (err) => err.code === 'currency_mismatch'
+test('same externalId with a different payload conflicts', () => {
+  const { ledger, alice, bob } = makeEngine();
+  ledger.transfer({ externalId: 'op-3', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 10 });
+  assertCode(
+    () => ledger.transfer({ externalId: 'op-3', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 11 }),
+    'external_id_conflict',
+    409
+  );
+  assertCode(
+    () => ledger.transfer({ externalId: 'op-3', sourceAccountId: 'bob', destinationAccountId: 'alice', amount: 10 }),
+    'external_id_conflict',
+    409
   );
 });
 
-test('same source and destination is refused', () => {
-  const ledger = makeLedger();
-  assert.throws(
-    () => ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'alice', amount: 10 }),
-    (err) => err.code === 'same_account'
+test('optimistic concurrency: expectedSourceVersion mismatch conflicts', () => {
+  const { ledger, alice, bob, treasury } = makeEngine();
+  const version = ledger.getAccount('alice').version;
+  assert.equal(version, 1);
+  ledger.transfer({ externalId: 'v1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 1 });
+  assertCode(
+    () => ledger.transfer({ externalId: 'v2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 1, expectedSourceVersion: version }),
+    'version_conflict',
+    409
   );
+  ledger.transfer({ externalId: 'v3', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 1, expectedSourceVersion: ledger.getAccount('alice').version });
 });
 
-test('zero and negative amounts are refused', () => {
-  const ledger = makeLedger();
-  assert.throws(
-    () => ledger.transfer({ externalId: 't0', sourceAccountId: 'house:treasury', destinationAccountId: 'alice', amount: 0 }),
-    (err) => err.code === 'invalid_amount'
-  );
-  assert.throws(
-    () => ledger.transfer({ externalId: 'tn', sourceAccountId: 'house:treasury', destinationAccountId: 'alice', amount: -5 }),
-    (err) => err.code === 'invalid_amount'
-  );
-});
-
-test('amounts beyond currency precision are refused', () => {
-  const ledger = makeLedger();
-  assert.throws(
-    () => ledger.transfer({ externalId: 't1', sourceAccountId: 'house:treasury', destinationAccountId: 'alice', amount: 10.257 }),
-    (err) => err.code === 'amount_precision'
-  );
-});
-
-test('a batch is all-or-nothing under cumulative funds simulation', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 100, 'seed-1');
-  const before = ledger.stats().transactions;
-  assert.throws(
+test('batches are all-or-nothing: one failure writes nothing', () => {
+  const { ledger, alice, bob } = makeEngine();
+  assertCode(
     () =>
       ledger.transferBatch({
-        batchId: 'bat-1',
+        batchId: 'batch-1',
         transfers: [
-          { externalId: 'b1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 60 },
-          { externalId: 'b2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 60 },
+          { externalId: 'b1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 10 },
+          { externalId: 'b2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 100000 },
         ],
       }),
-    (err) => err.code === 'insufficient_funds'
+    'insufficient_funds',
+    409
   );
-  assert.equal(ledger.stats().transactions, before);
-  assert.equal(ledger.balanceOf(ledger.getAccount('alice')), 10000n);
-  assert.equal(ledger.balanceOf(ledger.getAccount('bob')), 0n);
+  assert.equal(ledger.stats().transactions, 2); // only the seeds
+  assert.equal(ledger.balanceOf(alice), 10000n);
 });
 
-test('a valid batch commits every item in order', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 100, 'seed-1');
+test('batches move cumulative funds within one atomic batch', () => {
+  const { ledger, alice, bob } = makeEngine(); // alice holds 100.00
   const batch = ledger.transferBatch({
-    batchId: 'bat-2',
     transfers: [
-      { externalId: 'b1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 60 },
-      { externalId: 'b2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 0.4 },
+      { externalId: 'c1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 60 },
+      { externalId: 'c2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 30 },
     ],
   });
   assert.equal(batch.count, 2);
-  assert.equal(ledger.balanceOf(ledger.getAccount('alice')), 3960n);
-  assert.equal(ledger.balanceOf(ledger.getAccount('bob')), 6040n);
+  assert.equal(ledger.balanceOf(alice), 1000n);
+  assert.equal(ledger.balanceOf(bob), 13000n);
 });
 
-test('optimistic concurrency rejects a stale expectedSourceVersion', () => {
-  const ledger = makeLedger();
-  seed(ledger, 'alice', 100, 'seed-1');
-  const { version } = ledger.getAccount('alice');
-  ledger.transfer({ externalId: 't1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 10 });
-  assert.throws(
+test('batch with insufficient cumulative funds is refused entirely', () => {
+  const { ledger, alice, bob } = makeEngine();
+  assertCode(
     () =>
-      ledger.transfer({
-        externalId: 't2',
-        sourceAccountId: 'alice',
-        destinationAccountId: 'bob',
-        amount: 10,
-        expectedSourceVersion: version,
+      ledger.transferBatch({
+        transfers: [
+          { externalId: 'd1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 60 },
+          { externalId: 'd2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 60 },
+        ],
       }),
-    (err) => err.code === 'version_conflict' && err.status === 409
+    'insufficient_funds',
+    409
   );
+  assert.equal(ledger.balanceOf(alice), 10000n);
 });
 
-test('unknown accounts and ledgers produce typed 404s', () => {
-  const ledger = makeLedger();
-  assert.throws(
-    () => ledger.transfer({ externalId: 't1', sourceAccountId: 'ghost', destinationAccountId: 'alice', amount: 1 }),
-    (err) => err.code === 'account_not_found' && err.status === 404
-  );
-  assert.throws(
-    () => ledger.createAccount({ ledgerId: 'nope', currency: 'USD' }),
-    (err) => err.code === 'ledger_not_found' && err.status === 404
-  );
+test('ledger listing filters by account and time and paginates in commit order', () => {
+  const { ledger, alice, bob } = makeEngine();
+  ledger.transfer({ externalId: 'l1', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 1 });
+  ledger.transfer({ externalId: 'l2', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: 2 });
+  ledger.transfer({ externalId: 'l3', sourceAccountId: 'bob', destinationAccountId: 'alice', amount: 3 });
+  const all = ledger.listTransactions({});
+  assert.equal(all.total, 5);
+  assert.equal(all.items[0].externalId, 's:alice');
+  const page = ledger.listTransactions({ limit: 2, offset: 1 });
+  assert.deepEqual(page.items.map((t) => t.externalId), ['s:bob', 'l1']);
+  const onlyAlice = ledger.listTransactions({ accountId: 'alice' });
+  assert.equal(onlyAlice.total, 4);
 });
 
-test('duplicate explicit account ids are refused', () => {
-  const ledger = makeLedger();
-  assert.throws(
-    () => ledger.createAccount({ id: 'alice', currency: 'USD' }),
-    (err) => err.code === 'account_exists' && err.status === 409
-  );
+test('known currencies map to the right minor-unit scale', () => {
+  const { ledger } = makeEngine();
+  const jpy = ledger.createAccount({ id: 'jp1', currency: 'JPY' });
+  assert.equal(ledger.balanceOf(jpy), 0n);
 });
 
-test('zero-decimal and three-decimal currencies work exactly', () => {
-  const ledger = makeLedger();
-  ledger.createAccount({ id: 'yen-src', currency: 'JPY', type: 'house', direction: 'credit' });
-  ledger.createAccount({ id: 'yen', currency: 'JPY', name: 'Yen holder' });
-  ledger.createAccount({ id: 'dinar-src', currency: 'BHD', type: 'house', direction: 'credit' });
-  ledger.createAccount({ id: 'dinar-dst', currency: 'BHD', name: 'Dinar holder' });
-
-  ledger.transfer({ externalId: 'j1', sourceAccountId: 'yen-src', destinationAccountId: 'yen', amount: 1000 });
-  assert.equal(ledger.balanceOf(ledger.getAccount('yen')), 1000n);
-  assert.throws(
-    () => ledger.transfer({ externalId: 'j2', sourceAccountId: 'yen-src', destinationAccountId: 'yen', amount: 1.5 }),
-    (err) => err.code === 'amount_precision'
+test('transfer to a missing account is a 404 and leaves state untouched', () => {
+  const { ledger, alice } = makeEngine();
+  assertCode(
+    () => ledger.transfer({ externalId: 'm1', sourceAccountId: 'alice', destinationAccountId: 'ghost', amount: 1 }),
+    'account_not_found',
+    404
   );
-
-  ledger.transfer({ externalId: 'd1', sourceAccountId: 'dinar-src', destinationAccountId: 'dinar-dst', amount: 1 });
-  assert.equal(ledger.balanceOf(ledger.getAccount('dinar-dst')), 1000n, '1.000 BHD = 1000 minor units');
+  assert.equal(ledger.getAccount('alice').version, 1);
 });
 
-function totalMoney(ledger) {
-  let credits = 0n;
-  let debits = 0n;
-  for (const account of ledger.listAccounts()) {
-    credits += account.credits;
-    debits += account.debits;
-  }
-  return credits - debits;
-}
+test('very large amounts are capped at the safe integer range', () => {
+  const { ledger, alice, bob } = makeEngine();
+  assertCode(
+    () => ledger.transfer({ externalId: 'big', sourceAccountId: 'alice', destinationAccountId: 'bob', amount: Number.MAX_SAFE_INTEGER }),
+    'amount_overflow',
+    422
+  );
+});

@@ -36,7 +36,6 @@
 const { fail } = require('./errors');
 
 const MAX_SAFE_MINOR = BigInt(Number.MAX_SAFE_INTEGER); // minor units cap
-const MILLI = 1000; // requests carry up to 3 decimal places
 const DEFAULT_SCALE = 2;
 const CURRENCY_PATTERN = /^[A-Z][A-Z0-9]{2,7}$/;
 
@@ -424,21 +423,29 @@ class Ledger {
 
   /**
    * Convert a request amount (decimal units, <= 3 dp) into exact minor units.
-   * Milliprecision in, currency-appropriate precision enforced.
+   * Parsing is string-based and exact: no binary floating point ever touches
+   * the monetary value. Requests carry up to 3 decimal places and are
+   * rejected if they exceed the currency's own precision.
    */
   #toMinor(value, currency) {
+    let text;
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) fail('amount must be a finite number', 'invalid_amount', 422);
-      const milli = value * MILLI;
-      if (Math.abs(milli - Math.round(milli)) > 1e-6) {
-        fail('amount supports at most 3 decimal places', 'amount_precision', 422);
-      }
-      return this.#fromMilli(BigInt(Math.round(milli)), scaleOf(currency));
+      if (Math.abs(value) >= 1e15) fail('amount is too large', 'amount_overflow', 422);
+      text = value.toString();
+    } else if (typeof value === 'string' && value.trim() !== '') {
+      text = value.trim();
+    } else {
+      fail('amount must be a number of decimal units (e.g. 10.25)', 'invalid_amount', 422);
     }
-    if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
-      return this.#toMinor(Number(value), currency);
+    const match = /^-?(\d+)(?:\.(\d{1,3}))?$/.exec(text);
+    if (!match) {
+      fail('amount supports at most 3 decimal places', 'amount_precision', 422);
     }
-    fail('amount must be a number of decimal units (e.g. 10.25)', 'invalid_amount', 422);
+    const negative = text.startsWith('-');
+    const frac = (match[2] || '').padEnd(3, '0');
+    const milli = BigInt(match[1] + frac) * (negative ? -1n : 1n);
+    return this.#fromMilli(milli, scaleOf(currency));
   }
 
   #fromMilli(milli, scale) {

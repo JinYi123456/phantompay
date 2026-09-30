@@ -26,6 +26,7 @@ function serializeAccount(account, engine) {
     id: account.id,
     ledgerId: account.ledgerId,
     name: account.name,
+    currency: account.currency,
     type: account.type,
     direction: account.direction,
     metadata: account.metadata,
