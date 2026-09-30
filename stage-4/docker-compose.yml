@@ -1,0 +1,12 @@
+services:
+  phantom-pay:
+    build: .
+    image: phantom-pay:stage-3
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped

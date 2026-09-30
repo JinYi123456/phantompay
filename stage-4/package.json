@@ -1,0 +1,16 @@
+{
+  "name": "phantom-pay-stage-4",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "PhantomPay stage 4 - payment lifecycle, escrow holds and a tamper-evident audit chain (zero-dependency Node.js)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
