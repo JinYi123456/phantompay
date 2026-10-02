@@ -14,7 +14,8 @@ complete, buildable service:
 |-------|--------------|------:|------------|
 | [stage-1](stage-1/) | Ledger core + HTTP API | 30 | BigInt minor units, idempotent transfers (replay decided *before* funds), all-or-nothing batches, optimistic locking |
 | [stage-2](stage-2/) | Dark responsive web UI (same process) | 31 | Pure API client, no build step, double-submit guarded forms |
-| [stage-3](stage-3/) | Recurring transfers, deposits/withdrawals, statements | 53 | Exactly-once scheduler with crash-injection tests, instant-precision time windows, stable cursor paging || [stage-4](stage-4/) | Payment lifecycle + tamper-evident audit | 76 | Escrow holds per currency, partial capture/void/refund, TTL expiry (injected clock), SHA-256 hash chain with public `/audit/verify` |
+| [stage-3](stage-3/) | Recurring transfers, deposits/withdrawals, statements | 53 | Exactly-once scheduler with crash-injection tests, instant-precision time windows, stable cursor paging |
+| [stage-4](stage-4/) | Payment lifecycle + tamper-evident audit | 76 | Escrow holds per currency, partial capture/void/refund, TTL expiry (injected clock), SHA-256 hash chain with public `/audit/verify` |
 | [stage-5](stage-5/) | Hard-fault safety layer + command center | 77 | ASIL-D safety supervisor, CAN-FD bus with CRC-8 frame guards, UDS diagnostics, 4-agent consensus verification, custom linter + git pre-commit quality gate, OTel-style telemetry, real-time SSE command center |
 
 267 tests green across the five stages, zero runtime dependencies
