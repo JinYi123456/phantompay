@@ -219,6 +219,20 @@ payment lifecycle, the raw OTLP/JSON span view, a critical halt with a refused
 commit, recovery, and the audit + conformance gate. Tabs are deep-linkable
 (`/?tab=bus`, `/#ledger`).
 
+The walkthrough is a **manual, resumable step machine**, not one long
+auto-playing stream. A docked control bar at the bottom carries
+**◀ Prev · ❚❚ Auto · Next ➔ · ⏱ pace · ■ Stop**:
+
+- **Next ➔ / ◀ Prev** advance one beat at a time — perfect for narration-synced
+  recording — without restarting the run; `→` / `←` do the same from the keyboard.
+- **Auto** replays on a slow timer: **9 s per step** by default, cycled through
+  6 s / 9 s / 12 s with **⏱**, so each beat has room to breathe. `space` toggles
+  it, `Esc` stops.
+- `/?demo=1&auto=0` starts **paused on step 1** for fully hand-driven takes.
+- The bar is docked edge-to-edge with a scrim above it, so it never covers the
+  panel it describes, and each step smooth-scrolls its target into the visible
+  band (below the sticky header, above the dock).
+
 ## Stack mapping (this repo vs. the classic polyglot stack)
 
 The requested production stack, and the zero-dependency equivalent that

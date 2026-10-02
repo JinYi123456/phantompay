@@ -30,9 +30,23 @@ npm start                     # serves the command center on http://localhost:80
 4. Keep **execution events ON** in the BAND room during Take A so that tool
    calls and thoughts are fully visible (do not pass `emit=()` to any seat).
 
-Hands-free option for Take B: open `http://localhost:8000/?demo=1` — the
-walkthrough starts on its own a moment after boot (the ▶ button does the same
-thing). Deep links work too: `/?tab=bus`, `/#ledger`, etc.
+Starting the walkthrough for Take B: click **▶ RUN DEMO SCENARIO**, or open
+`http://localhost:8000/?demo=1` to have it start on its own a moment after boot.
+
+**Driving the demo — you are in control.** The docked bar at the bottom carries
+**◀ Prev**, **❚❚ Auto**, **Next ➔**, **⏱ pace** and **■ Stop**:
+
+- **Step manually** with **Next ➔** / **◀ Prev** — advance one beat at a time and
+  hold as long as the narration needs. No restart, no waiting for a timer.
+- **Keyboard:** `→` next, `←` prev, `space` play/pause, `Esc` stop.
+- **Auto-play** is deliberately slow — **9 s per step** by default; click
+  **⏱ 9s** to cycle 6 s / 9 s / 12 s so there is room to talk over each beat.
+- Add **`&auto=0`** to `?demo=1` to start **paused on step 1** and drive the whole
+  walkthrough by hand — recommended for narration-synced recording.
+- The bar is docked edge-to-edge and page content fades out behind it, so nothing
+  is ever hidden mid-recording.
+
+Deep links work too: `/?tab=bus`, `/#ledger`, etc.
 
 ---
 
@@ -44,8 +58,9 @@ thing). Deep links work too: `/?tab=bus`, `/#ledger`, etc.
      the four seats (Architect → Implementer → Reviewer → Verifier) with the
      `REJECT → rework` arc, the four stage chips (30 / 31 / 53 / 76 tests, all
      `VERIFIED`) and the three defects caught before ship. Click
-     **▶ RUN DEMO SCENARIO** to trigger the automated walkthrough; the demo HUD
-     appears and the tabs drive themselves.
+     **▶ RUN DEMO SCENARIO** to start the walkthrough; the docked demo bar
+     appears and — in Auto — the tabs drive themselves. For the take, press
+     **❚❚ Auto** to pause and advance with **Next ➔** at your own pace.
    - *Narration*: "Welcome to PhantomPay — a next-gen high-reliability payment
      system fusing a financial double-entry ledger with ISO 26262 ASIL-D
      hard-fault protection. The whole thing was autonomously designed,
@@ -119,8 +134,9 @@ thing). Deep links work too: `/?tab=bus`, `/#ledger`, etc.
 ## Assembly notes
 
 - Order: **Take B first, then Take A** (product proof before process proof).
-- The demo HUD ("LIVE DEMO · STEP n/15") makes Take B trivially cuttable —
-  start the capture just before pressing ▶.
+- The docked bar ("LIVE DEMO · STEP n/15") makes Take B trivially cuttable —
+  start the capture, then step with **Next ➔** so every beat lands exactly on
+  the narration. Nothing is cut off: the bar is docked and content fades above it.
 - Captions/subtitles: optional; if added, keep English.
 - Per the rules, the room recording **must** be included — Take A satisfies
   this; do not cut it.

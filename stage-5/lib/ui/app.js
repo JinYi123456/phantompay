@@ -1148,7 +1148,42 @@ const DEMO_STEPS = [
   },
 ];
 
-const demo = { running: false, aborted: false };
+/* The walkthrough is a manual, resumable step machine rather than one long
+   auto-playing stream: Prev / Next move a single beat at a time (so narration
+   can set the pace), Auto replays on a slow timer, and the docked bar never
+   covers the panel it is describing. */
+const DEMO_PACE_CHOICES = [6000, 9000, 12000];
+const demo = {
+  active: false,
+  index: -1,
+  busy: false,
+  auto: true,
+  pace: 9000,
+  timer: null,
+};
+
+const demoTotal = () => DEMO_STEPS.length;
+
+/** Smooth-scroll an element into the band of the viewport that is actually
+    visible — below the sticky topbar and above the docked demo bar — so a
+    focused card is never left half cut off. */
+function scrollIntoViewSmart(el) {
+  if (!el || typeof el.getBoundingClientRect !== 'function') return;
+  const topbar = document.querySelector('.topbar');
+  const headerH = topbar ? topbar.offsetHeight : 0;
+  const overlay = $('#demo-overlay');
+  const dockH = document.body.classList.contains('demo-on') && overlay ? overlay.offsetHeight : 0;
+  const rect = el.getBoundingClientRect();
+  const available = window.innerHeight - headerH - dockH;
+  const margin = 16;
+  let top;
+  if (rect.height >= available - margin * 2) {
+    top = window.scrollY + rect.top - headerH - margin; // taller than the band: pin to its top
+  } else {
+    top = window.scrollY + rect.top - headerH - (available - rect.height) / 2;
+  }
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+}
 
 function highlight(selector) {
   const el = typeof selector === 'string' ? document.querySelector(selector) : selector;
@@ -1156,72 +1191,136 @@ function highlight(selector) {
   el.classList.remove('hl');
   void el.offsetWidth;
   el.classList.add('hl');
-  try {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  } catch {
-    /* older engines: no smooth scroll */
-  }
+  // Wait one frame so the freshly-shown tab panel has laid out before we
+  // measure it and scroll it into the safe band.
+  requestAnimationFrame(() => scrollIntoViewSmart(el));
 }
 
-function setHud(index, total, step) {
-  const overlay = $('#demo-overlay');
-  overlay.classList.add('on');
-  overlay.setAttribute('aria-hidden', 'false');
+function hudSet(index) {
+  const total = demoTotal();
+  const step = DEMO_STEPS[index] || DEMO_STEPS[0];
   $('#demo-count').textContent = `STEP ${index + 1}/${total}`;
   $('#demo-tab').textContent = step.tab;
   $('#demo-title').textContent = step.title;
-  $('#demo-bar').style.width = `${Math.round((index / total) * 100)}%`;
+  $('#demo-bar').style.width = `${Math.round(((index + 1) / total) * 100)}%`;
+  $('#demo-prev').disabled = index <= 0;
+  $('#demo-next').disabled = index >= total - 1;
+  const play = $('#demo-play');
+  play.setAttribute('aria-pressed', String(demo.auto));
+  play.classList.toggle('paused', !demo.auto);
+  play.textContent = demo.auto ? '\u275A\u275A Auto' : '\u25B6 Auto';
+  $('#demo-pace').textContent = `\u23F1 ${Math.round(demo.pace / 1000)}s`;
 }
 
-async function runDemo() {
-  if (demo.running) return;
-  demo.running = true;
-  demo.aborted = false;
+/** Run one step (by absolute index) and arm the next auto-advance. */
+async function demoGoto(index) {
+  if (!demo.active || demo.busy) return;
+  demo.busy = true;
+  clearTimeout(demo.timer);
+  demo.index = Math.max(0, Math.min(demoTotal() - 1, index));
+  const step = DEMO_STEPS[demo.index];
+  hudSet(demo.index);
+  if (step.tab) switchTab(step.tab);
+  if (step.focus) highlight(step.focus);
+  try {
+    await step.run();
+  } catch (err) {
+    toast(`step ${demo.index + 1}: ${err && err.message ? err.message : err}`, true);
+  }
+  demo.busy = false;
+  if (!demo.active) return;
+  hudSet(demo.index);
+  if (demo.index >= demoTotal() - 1) {
+    demoFinish();
+  } else {
+    demoArm();
+  }
+}
+
+function demoArm() {
+  clearTimeout(demo.timer);
+  if (!demo.active || !demo.auto) return;
+  if (demo.index >= demoTotal() - 1) return;
+  demo.timer = setTimeout(() => { demoGoto(demo.index + 1); }, demo.pace);
+}
+
+async function demoFinish() {
+  clearTimeout(demo.timer);
+  demo.auto = false;
+  sfx.success();
+  await Promise.all([loadSafety(), loadAccounts(), loadTxns(), loadBus(), loadAudit(), loadSpans(), loadPayments()]);
+  if (!demo.active) return;
+  hudSet(demo.index);
+  toast('DEMO COMPLETE · every gate exercised: CRC drop, consensus halt, degraded commit, escrow lifecycle, hard halt + refusal, recovery, unanimous re-verify');
+}
+
+async function startDemo() {
+  if (demo.active) return;
+  demo.active = true;
+  demo.auto = true;
+  demo.index = -1;
+  demo.busy = false;
   state.demoRunning = true;
+  document.body.classList.add('demo-on');
+  const overlay = $('#demo-overlay');
+  overlay.classList.add('on');
+  overlay.setAttribute('aria-hidden', 'false');
   const button = $('#demo-run');
   button.disabled = true;
   button.classList.add('running');
   sfx.charge();
-
-  const total = DEMO_STEPS.length;
-  for (let i = 0; i < total; i += 1) {
-    if (demo.aborted) break;
-    const step = DEMO_STEPS[i];
-    setHud(i, total, step);
-    if (step.tab) switchTab(step.tab);
-    if (step.focus) highlight(step.focus);
-    try {
-      await step.run();
-    } catch (err) {
-      toast(`demo step failed: ${err && err.message ? err.message : err}`, true);
-    }
-    if (demo.aborted) break;
-    $('#demo-bar').style.width = `${Math.round(((i + 1) / total) * 100)}%`;
-    await sleep(step.hold || 1200);
-  }
-
-  await Promise.all([loadSafety(), loadAccounts(), loadTxns(), loadBus(), loadAudit(), loadSpans(), loadPayments()]);
-  sfx.success();
-  if (demo.aborted) {
-    toast('demo stopped');
-  } else {
-    toast('DEMO COMPLETE · every gate exercised: CRC drop, consensus halt, degraded commit, escrow lifecycle, hard halt + refusal, recovery, unanimous re-verify');
-  }
-  demo.running = false;
-  state.demoRunning = false;
-  button.disabled = false;
-  button.classList.remove('running');
-  setTimeout(() => {
-    const overlay = $('#demo-overlay');
-    overlay.classList.remove('on');
-    overlay.setAttribute('aria-hidden', 'true');
-  }, 3200);
+  await demoGoto(0);
 }
 
-$('#demo-run').addEventListener('click', runDemo);
-$('#demo-stop').addEventListener('click', () => {
-  demo.aborted = true;
-  toast('stopping demo…');
+function stopDemo(quiet) {
+  clearTimeout(demo.timer);
+  if (!demo.active) return;
+  demo.active = false;
+  demo.busy = false;
+  demo.auto = false;
+  state.demoRunning = false;
+  document.body.classList.remove('demo-on');
+  const overlay = $('#demo-overlay');
+  overlay.classList.remove('on');
+  overlay.setAttribute('aria-hidden', 'true');
+  const button = $('#demo-run');
+  button.disabled = false;
+  button.classList.remove('running');
+  if (!quiet) toast('demo stopped');
+}
+
+$('#demo-run').addEventListener('click', startDemo);
+$('#demo-next').addEventListener('click', () => demoGoto(demo.index + 1));
+$('#demo-prev').addEventListener('click', () => demoGoto(demo.index - 1));
+$('#demo-stop').addEventListener('click', () => stopDemo(false));
+$('#demo-play').addEventListener('click', () => {
+  if (!demo.active) return;
+  demo.auto = !demo.auto;
+  if (demo.auto) {
+    if (demo.index >= demoTotal() - 1) { demo.index = -1; demoGoto(0); return; }
+    demoArm();
+  } else {
+    clearTimeout(demo.timer);
+  }
+  hudSet(Math.max(0, demo.index));
+});
+$('#demo-pace').addEventListener('click', () => {
+  const at = DEMO_PACE_CHOICES.indexOf(demo.pace);
+  demo.pace = DEMO_PACE_CHOICES[(at + 1) % DEMO_PACE_CHOICES.length];
+  hudSet(Math.max(0, demo.index));
+  if (demo.active && demo.auto) demoArm();
+});
+
+/* Keyboard control for hands-on recording: ←/→ step, space toggles auto,
+   Esc stops. Ignored while typing in a form field. */
+document.addEventListener('keydown', (event) => {
+  if (!demo.active) return;
+  const tag = (event.target && event.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (event.key === 'ArrowRight') { event.preventDefault(); demoGoto(demo.index + 1); }
+  else if (event.key === 'ArrowLeft') { event.preventDefault(); demoGoto(demo.index - 1); }
+  else if (event.key === ' ') { event.preventDefault(); $('#demo-play').click(); }
+  else if (event.key === 'Escape') { stopDemo(false); }
 });
 
 /* ============================================================ refreshers */
@@ -1259,8 +1358,10 @@ $('#audio-toggle').addEventListener('click', () => {
   setInterval(() => { loadBus(); loadSpans(); }, 6000);
 
   // Auto-run for hands-free recording: open /?demo=1 and the walkthrough
-  // starts on its own a moment after boot.
+  // starts on its own a moment after boot. Add &auto=0 to start paused so the
+  // operator can drive Prev / Next by hand from the first step.
   if (new URLSearchParams(location.search).get('demo') === '1') {
-    setTimeout(runDemo, 1200);
+    const auto = new URLSearchParams(location.search).get('auto') !== '0';
+    setTimeout(() => { startDemo(); if (!auto) $('#demo-play').click(); }, 1200);
   }
 })();

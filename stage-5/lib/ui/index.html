@@ -311,8 +311,8 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- ==================== CINEMATIC DEMO HUD ==================== -->
-  <div id="demo-overlay" class="demo-overlay" aria-hidden="true">
+  <!-- ============ CINEMATIC DEMO HUD (docked, non-blocking control bar) ============ -->
+  <div id="demo-overlay" class="demo-overlay" aria-hidden="true" role="region" aria-label="Demo control bar">
     <div class="demo-hud">
       <div class="demo-hud-left">
         <span class="demo-badge"><span class="rec-dot"></span>LIVE DEMO</span>
@@ -323,7 +323,13 @@
         <div id="demo-title" class="demo-title">ready</div>
         <div class="demo-bar"><i id="demo-bar"></i></div>
       </div>
-      <button id="demo-stop" class="btn danger" type="button">■ Stop</button>
+      <div class="demo-controls" role="group" aria-label="Demo step controls">
+        <button id="demo-prev" class="btn demo-ctl" type="button" title="Previous step  (←)" aria-label="Previous step">◀ Prev</button>
+        <button id="demo-play" class="btn demo-ctl" type="button" aria-pressed="true" title="Pause / resume auto-play  (space)">❚❚ Auto</button>
+        <button id="demo-next" class="btn demo-ctl primary" type="button" title="Next step  (→)" aria-label="Next step">Next ➔</button>
+        <button id="demo-pace" class="btn demo-ctl" type="button" title="Auto-play pace (click to cycle 6s / 9s / 12s)">⏱ 9s</button>
+        <button id="demo-stop" class="btn demo-ctl danger" type="button" title="Stop demo  (Esc)">■ Stop</button>
+      </div>
     </div>
   </div>
 

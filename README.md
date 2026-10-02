@@ -104,10 +104,14 @@ A single pane of glass over the whole system, driven by a live SSE stream
 | **Audit & Lint** | The SHA-256 hash chain and the custom linter's conformance report |
 
 **▶ RUN DEMO SCENARIO** (or open `http://localhost:8000/?demo=1`) launches a
-15-step director that drives a hands-free walkthrough for recording — CRC
-drop, consensus halt, degraded-mode commit, escrow lifecycle, hard halt +
-refused commit, recovery and re-verification — switching tabs and highlighting
-each panel on its own, with a cinematic HUD (`LIVE DEMO · STEP n/15`).
+15-step director for recording — CRC drop, consensus halt, degraded-mode
+commit, escrow lifecycle, hard halt + refused commit, recovery and
+re-verification — switching tabs and highlighting each panel. A docked control
+bar (`LIVE DEMO · STEP n/15`) gives **◀ Prev · ❚❚ Auto · Next ➔ · ⏱ pace ·
+■ Stop**, so you can step beat-by-beat to match the narration (or let Auto run
+at 9 s/step); `→` / `←` / `space` / `Esc` work too, and `?demo=1&auto=0` starts
+paused. The bar is docked edge-to-edge with a scrim above it, so it never covers
+the panel it is describing.
 
 ### 4-agent orchestration graph
 
