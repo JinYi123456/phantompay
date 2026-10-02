@@ -49,35 +49,42 @@ process, offline-clean.
 cd stage-5
 npm test          # 77/77 tests (node --test, zero deps)
 npm run lint      # custom quality gate: 7 hygiene + 13 conformance rules
-npm start         # http://localhost:8080 — command center at /
+npm start         # http://localhost:8000 — command center at /
 ```
 
-Then open the command center and press **▶ RUN DEMO SCENARIO**: it runs a
-verification round, corrupts a CAN-FD frame, commits in degraded mode,
-triggers a critical fault (SAFE_HALT), proves a commit is refused (503),
-walks the operator recovery grace period, and re-verifies unanimity.
+Then open the command center and press **▶ RUN DEMO SCENARIO** (or load
+`http://localhost:8000/?demo=1`): a 15-step director drives itself through a
+clean verification round, a corrupted CAN-FD frame, a consensus divergence
+that halts the system, the UDS console, a degraded-mode commit with a replay,
+the escrow payment lifecycle, a raw OTLP/JSON span view, a critical hard halt
+with a refused commit, an operator recovery, and the audit + conformance
+gate — switching tabs and highlighting each panel on its own.
 
 The same scenario over raw HTTP:
 
 ```bash
-curl -s -X POST localhost:8080/safety/faults \
+curl -s -X POST localhost:8000/safety/faults \
   -H 'content-type: application/json' \
   -d '{"code":"demo_halt","severity":"critical"}'
 # -> {"state":"SAFE_HALT", ...}
 
-curl -s -X POST localhost:8080/transfers -H 'content-type: application/json' \
+curl -s -X POST localhost:8000/transfers -H 'content-type: application/json' \
   -d '{"externalId":"x1","sourceAccountId":"user:alice","destinationAccountId":"user:bob","amount":"5.00"}'
 # -> 503 {"error":{"code":"safety_transition","details":{"state":"SAFE_HALT"}}}
 
-curl -s -X POST localhost:8080/safety/recovery -H 'content-type: application/json' -d '{"operator":"you"}'
+curl -s -X POST localhost:8000/safety/recovery -H 'content-type: application/json' -d '{"operator":"you"}'
 # wait out the grace period, then:
-curl -s -X POST localhost:8080/safety/recovery/complete
+curl -s -X POST localhost:8000/safety/recovery/complete
 
-curl -s -X POST localhost:8080/bus/fault       # corrupt a frame in flight
-curl -s -X POST localhost:8080/uds -H 'content-type: application/json' \
+curl -s -X POST localhost:8000/uds -H 'content-type: application/json' \
   -d '{"sid":"0x22","did":"0xF100"}'           # read the safety state DID
-curl -s -X POST localhost:8080/verify          # run the 4-agent council
+curl -s -X POST localhost:8000/verify          # run the 4-agent council
+curl -s localhost:8000/factory                 # the build-time orchestration graph
 ```
+
+> `POST /bus/fault` corrupts the **oldest frame in flight**, so a frame must be
+> on the wire (the UI sends a diagnostic read first). With nothing in flight
+> it returns `409 no_frame_in_flight`.
 
 ---
 
@@ -184,14 +191,33 @@ movement and payment operations in spans; the UI renders the waterfall.
 
 Vanilla JS + SSE (no build step, no framework, same zero-dependency
 philosophy as stage 2's UI). Six panes: **Overview** (safety machine arc,
-fault lab, recovery controls), **Bus & Diagnostics** (frame log with CRCs,
-full UDS console), **Ledger** (accounts, transfers, batch storm, statement
-reconciliation), **Payments** (authorize/capture/void/refund), **Telemetry**
-(spans + live event stream), **Audit & Lint** (hash-chain explorer +
-quality-gate report). Amounts are displayed from server-computed exact
-`formatted` strings; the client never does money math. Audio feedback is a
-Web Audio synth (commit chime, CRC alarm, halt siren, recovery sweep) with
-a master toggle.
+fault lab, recovery controls, and the build-time **4-agent orchestration
+graph**), **Bus & Diagnostics** (frame log with CRCs + bus-health strip,
+full UDS console), **Ledger** (accounts, transfers, batch storm, a
+conservation banner), **Payments** (authorize/capture/void/refund with a
+lifecycle stepper), **Telemetry** (spans + live event stream + a raw
+OTLP/JSON inspector), **Audit & Lint** (hash-chain explorer with a chain
+summary + quality-gate report). Amounts are displayed from server-computed
+exact `formatted` strings; the client never does money math. Audio feedback
+is a Web Audio synth (commit chime, CRC alarm, halt siren, recovery sweep)
+with a master toggle.
+
+**Orchestration graph.** `GET /factory` (`lib/factory.js`) reads the exported
+room conversation in [`factory/room-export.json`](../factory/room-export.json)
+and shapes it into the graph the Overview draws: the four seats (Architect,
+Implementer, Reviewer, Verifier), the dispatch → plan → implement → review →
+verify → accept pipeline with the `REJECT`/`FAILED` rework arcs, the per-stage
+verdicts (30 / 31 / 53 / 76 tests, all `VERIFIED`) and the three real defects
+the gates caught. The export is optional — a standalone stage-5 checkout still
+renders the static seat and pipeline definition.
+
+**Run Demo Scenario.** The ▶ button (or `/?demo=1`) runs a 15-step director:
+it switches tabs, highlights each panel, and exercises the whole system —
+clean verification round, CRC drop, consensus divergence → `SAFE_HALT`, UDS
+read, operator recovery, degraded-mode commit + idempotent replay, the escrow
+payment lifecycle, the raw OTLP/JSON span view, a critical halt with a refused
+commit, recovery, and the audit + conformance gate. Tabs are deep-linkable
+(`/?tab=bus`, `/#ledger`).
 
 ## Stack mapping (this repo vs. the classic polyglot stack)
 
@@ -228,6 +254,7 @@ stage-5/
 │   ├── telemetry.js       W3C traces + OTLP/JSON export
 │   ├── linter.js          hygiene + conformance quality gate
 │   ├── audit.js           SHA-256 tamper-evident chain (finance + safety)
+│   ├── factory.js         4-seat orchestration graph (from the room export)
 │   ├── http.js / errors.js / serialize.js / metrics.js  shared plumbing
 │   └── ui/                index.html · ui.css · app.js · favicon.svg
 ├── test/                  7 suites, 77 tests (node --test)

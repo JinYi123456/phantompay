@@ -37,8 +37,9 @@ const { SafetySupervisor, CanFdBus, UdsServer } = require('./lib/safety');
 const { AgentCouncil } = require('./lib/agents');
 const { Tracer } = require('./lib/telemetry');
 const { runLint } = require('./lib/linter');
+const factory = require('./lib/factory');
 
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 8000);
 const HOST = process.env.HOST || '0.0.0.0';
 const TICK_MS = Number(process.env.SAFETY_TICK_MS || 2000);
 const ROUND_EVERY_TICKS = 5;
@@ -191,6 +192,12 @@ router.get('/metrics', () => metrics.render({
   transactionCount: engine.stats().transactions,
   port: PORT,
 }));
+
+// The build-time orchestration graph: the four BAND seats and the
+// dispatch -> plan -> implement -> review -> verify -> accept pipeline that
+// produced this repo, with per-stage verdicts and the defects the gates
+// caught (read from factory/room-export.json when present).
+router.get('/factory', () => factory.graph());
 
 // ----------------------------------------------------- ledger & movements
 

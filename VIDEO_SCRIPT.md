@@ -1,78 +1,126 @@
 # VIDEO_SCRIPT.md — PhantomPay demo recording plan
 
-Target length: **3–4 minutes**. Two recordings, cut together:
+Target length: **2.5–3 minutes**. Two recordings, cut together:
 
-- **A — room recording**: BAND Desktop, the PhantomPay room, scrolling the
-  exported conversation (this doubles as the required room recording).
-- **B — screen recording**: terminal + browser, live service.
+- **Take A — Room Recording**: BAND Desktop, the PhantomPay room, showing the
+  four agent seats (Architect, Implementer, Reviewer, Verifier), scrolling
+  through the timeline, tool calls and execution events. *(This satisfies the
+  mandatory room-recording rule.)*
+- **Take B — Product Screen & UI Demo**: terminal + browser
+  (`http://localhost:8000`), demonstrating the complete multi-page command
+  center: Run Demo Scenario, Overview, Bus & Diagnostics, Ledger, Payments,
+  Telemetry, and Audit & Lint.
 
-Record B first (it is the fiddly one), then A. Suggested tools: OBS or any
-screen recorder; record at 1080p. Do all takes in English (submission is in
-English).
+Record **Take B first, then Take A**. Language: **English** (for the hackathon
+submission). Export 1080p MP4, ≤ 200 MB, named `phantom-pay-demo.mp4`.
+
+---
 
 ## Prep (one-time, ~5 minutes)
 
 ```bash
-cd stage-4 && npm test        # expect: 76/76 pass on screen
-npm start                     # leave it running
+cd stage-5 && npm test        # expect: 77/77 pass on screen
+npm run lint                  # expect: 0 errors, 13/13 conformance
+npm start                     # serves the command center on http://localhost:8000
 ```
 
-Open a second terminal for `curl`s, and a browser at http://localhost:8080.
-Also open `FACTORY.md` and `factory/room-export.json`.
+1. Confirm the local environment boots successfully and the test suite passes.
+2. Open your browser to `http://localhost:8000`.
+3. Open a second terminal for the `curl`s and a copy of `FACTORY.md`.
+4. Keep **execution events ON** in the BAND room during Take A so that tool
+   calls and thoughts are fully visible (do not pass `emit=()` to any seat).
 
-**Keep execution events ON while recording Take A.** Do not pass `emit=()` to
-any seat's adapter — BAND posts every tool call, thought and finding to the
-room timeline, and that activity is required evidence that real agent work
-happened. A chat-only room weakens the demo.
+Hands-free option for Take B: open `http://localhost:8000/?demo=1` — the
+walkthrough starts on its own a moment after boot (the ▶ button does the same
+thing). Deep links work too: `/?tab=bus`, `/#ledger`, etc.
 
-## Take B — product screen (2–2.5 min)
+---
 
-1. **Cold start (0:00–0:25).** Fresh terminal, `npm test` in `stage-4/` —
-   let the full "76/76 pass" line be visible for a moment. Then `npm start`.
-   Say: *"This service was built end-to-end by four AI agent seats. The human
-   only dispatched tasks and accepted results. This is stage four — 76
-   certified tests, zero dependencies, boots with no network."*
-2. **The wallet (0:25–1:00).** Browser: accounts overview with seeded
-   balances (Alice 100, Bob 50). Send a payment from the UI — Alice → Bob —
-   and show the balance change. Say: *"A real payments core: double-entry
-   ledger, signed balances in integer minor units, users can never go
-   negative."*
-3. **Payment lifecycle (1:00–1:45).** Terminal curls: `POST /payments`
-   (authorize → escrow hold), partial capture, then `GET /payments/:id`.
-   Show the escrow account move in the accounts list. Say: *"Authorize holds
-   funds in escrow; capture can be partial, multiple times, until exhausted;
-   void releases; uncaptured holds expire on their own."*
-4. **Tamper-evidence (1:45–2:15).** `curl /audit/verify` → valid. Say:
-   *"Every mutation is hash-chained — SHA-256 over canonical JSON — and
-   anyone can verify the chain."* Optionally stop the server, edit one entry
-   in memory is not possible live — instead just show `/audit` entries and
-   the verify result.
-5. **Idempotency beat (2:15–2:30).** Repeat the same `POST /payments` with
-   the same `externalId` → same result, no double charge. Say: *"Every
-   operation is idempotent — replaying returns the original result."*
+## Take B — Product Screen & Live System Demo (2.5–3 minutes)
 
-## Take A — room screen (1–1.5 min)
+1. **Overview & Factory Demo (0:00 – 0:45)**
+   - *Screen*: Stay on the **Overview** page. Show the ASIL-D Safety Machine
+     and the Fault Lab, then scroll to the **Factory Orchestration** graph —
+     the four seats (Architect → Implementer → Reviewer → Verifier) with the
+     `REJECT → rework` arc, the four stage chips (30 / 31 / 53 / 76 tests, all
+     `VERIFIED`) and the three defects caught before ship. Click
+     **▶ RUN DEMO SCENARIO** to trigger the automated walkthrough; the demo HUD
+     appears and the tabs drive themselves.
+   - *Narration*: "Welcome to PhantomPay — a next-gen high-reliability payment
+     system fusing a financial double-entry ledger with ISO 26262 ASIL-D
+     hard-fault protection. The whole thing was autonomously designed,
+     reviewed and verified by our four agent seats in BAND — that's the
+     orchestration graph: four seats, forty-one messages, two rejections and
+     four cold-room certifications. Press **Run Demo Scenario** and watch it
+     drive fault injection, dynamic degradation and consensus recovery on its
+     own."
 
-6. **The factory (0:00–0:40).** BAND Desktop, PhantomPay room. Scroll from
-   the top: the four seats (Architect, Implementer, Reviewer, Verifier), the
-   stage-1 dispatch at the top. Say: *"Here is the actual room. Four seats,
-   generic mandates — no track hints. The human message at seq 4 is the stage
-   1 dispatch; the only other human messages are the four accepts."*
-7. **The catches (0:40–1:10).** Scroll to the Reviewer's REJECT at seq 19
-   (batch over-commit) and seq 84 (ISO timestamp compare), then the Verifier's
-   VERIFIED messages at seq 33, 61, 92, 118. Say: *"The Reviewer caught two
-   real defects — a batch over-commit and a timestamp-precision bug — and the
-   Verifier re-certified everything from a clean checkout. 30, 31, 53, 76
-   tests, all green at each verdict."*
-8. **Traceability (1:10–1:30).** Show the FACTORY.md traceability table
-   mapping each verdict seq to the commit. Say: *"Every file traces to a
-   handoff in this room. The factory is the process; these four folders are
-   the product."*
+2. **Bus & Diagnostics (0:45 – 1:15)**
+   - *Screen*: The demo switches to **Bus & Diagnostics**. Show the real-time
+     CAN-FD message stream with per-frame CRC-8, then the UDS console reading
+     `0xF104 dtcSummary`.
+   - *Narration*: "On the Bus & Diagnostics pane we monitor high-frequency
+     CAN-FD traffic with strict CRC-8 verification. A corrupted frame is
+     dropped at the gate — and the frame-guardian agent catches it: the
+     verification round diverges and the system halts itself. Through the UDS
+     terminal we pull the live diagnostic trouble codes straight out."
+
+3. **Ledger Core & Rigorous Protection (1:15 – 1:45)**
+   - *Screen*: **Ledger** — accounts (Alice & Bob) in integer minor units,
+     a transfer, then the same `externalId` replayed to show at-most-once.
+   - *Narration*: "In the Ledger we enforce strict double-entry invariants —
+     debits equal credits — in integer minor units, so no floating-point error
+     can ever touch money. Users can never go negative, and every transaction
+     is guarded by an idempotency key: replaying the same request returns the
+     original result instead of charging twice."
+
+4. **Payments & Telemetry (1:45 – 2:15)**
+   - *Screen*: **Payments** (authorize → partial capture → void lifecycle,
+     escrow holds visible), then **Telemetry** (expand a span into the raw
+     OTLP/JSON view).
+   - *Narration*: "The Payments module manages authorization escrow, partial
+     captures and refunds — funds are held, then captured or released.
+     Telemetry gives us OpenTelemetry-compliant distributed trace spans with
+     W3C context, and the raw OTLP/JSON export any collector can ingest."
+
+5. **Tamper-Evident Audit & Linter Gate (2:15 – 2:45)**
+   - *Screen*: **Audit & Lint** — the SHA-256 hash chain (safety transitions,
+     recoveries and payments all sealed in one chain) and the conformance
+     report, all green (13/13, 0 errors).
+   - *Narration*: "Finally, the Audit & Lint page seals every mutation and
+     every agent decision into a SHA-256 tamper-evident hash chain — edit one
+     entry and every hash after it breaks. The linter gate reports one hundred
+     percent conformance with zero errors. Thank you!"
+
+---
+
+## Take A — Room Screen & Process Proof (1 – 1.5 minutes)
+
+1. **The Factory Pipeline (0:00 – 0:40)**
+   - *Screen*: BAND Desktop, the PhantomPay room. Scroll from the top showing
+     the four seats (Architect, Implementer, Reviewer, Verifier) and the
+     initial stage dispatches.
+   - *Narration*: "Here is the actual BAND room. Four seats with generic
+     mandates — no product detail in any of them. The human message is the
+     stage task dispatch; the only other human interactions are the acceptance
+     sign-offs — one dispatch and one accept per stage."
+
+2. **Adversarial Catches & Verification (0:40 – 1:10)**
+   - *Screen*: Scroll through the Reviewer's `REJECT` messages (seq 19, seq 84)
+     and the Verifier's `VERIFIED` messages (seq 33 / 61 / 92 / 118).
+   - *Narration*: "The Reviewer successfully caught real design defects — a
+     batch over-commit and a timestamp-precision bug — and the Verifier
+     re-certified everything from a clean checkout: thirty, thirty-one,
+     fifty-three and seventy-six tests, all green at each verdict. Every file
+     traces to a handoff in this room."
+
+---
 
 ## Assembly notes
 
-- Order: Take B first, then Take A (product proof before process proof).
+- Order: **Take B first, then Take A** (product proof before process proof).
+- The demo HUD ("LIVE DEMO · STEP n/15") makes Take B trivially cuttable —
+  start the capture just before pressing ▶.
 - Captions/subtitles: optional; if added, keep English.
-- Export MP4 (H.264), ≤ 200 MB, name it `phantom-pay-demo.mp4`.
-- Per the rules, the room recording must be included in the video — Take A
-  satisfies this; do not cut it.
+- Per the rules, the room recording **must** be included — Take A satisfies
+  this; do not cut it.

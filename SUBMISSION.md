@@ -9,7 +9,7 @@ hosting and the form.
 
 | Item | State |
 |------|-------|
-| 4 stage folders, each a complete buildable service | ✅ `stage-1/` … `stage-4/` (30/31/53/76 tests green) |
+| 5 stage folders, each a complete buildable service | ✅ `stage-1/` … `stage-5/` (30/31/53/76/77 tests green) |
 | Generic agent mandates (no track/task detail) | ✅ `mandates/*.md` |
 | Factory build report | ✅ `FACTORY.md` |
 | Room export | ✅ `factory/room-export.json` (matches FACTORY.md seqs/verdicts/counts) |
@@ -48,7 +48,8 @@ Follow `VIDEO_SCRIPT.md` end-to-end. Non-negotiables:
 - Show the factory claims matching the repo: dispatches, the two REJECTs,
   the four VERIFIED verdicts (seq 33 / 61 / 92 / 118), and test counts
   30 / 31 / 53 / 76.
-- Keep it 3–4 minutes, 1080p, MP4.
+- Keep it **2.5–3 minutes**, 1080p, MP4 (see `VIDEO_SCRIPT.md` for the
+  Take A / Take B split).
 
 Upload to YouTube (unlisted is fine if public is not possible) or any
 hosting that serves a **public link** the form can accept. Title suggestion:
@@ -78,7 +79,7 @@ Have these ready before opening the form:
   > tamper-evident hash-chained audit trail — built end-to-end by four coding
   > agent seats (Architect, Implementer, Reviewer, Verifier) in a BAND room.
   > Per stage the human only dispatched the task and accepted the verified
-  > result; generic mandates carry zero task detail. Four frozen stages, 76
+  > result; generic mandates carry zero task detail. Five frozen stages, 267
   > tests, zero runtime dependencies, offline container boot, full room
   > export traceable to commits.
 

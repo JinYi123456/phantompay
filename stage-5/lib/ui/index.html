@@ -8,6 +8,9 @@
   <link rel="stylesheet" href="/ui/ui.css" />
 </head>
 <body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-scan" aria-hidden="true"></div>
+
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">◉</span>
@@ -27,12 +30,12 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab on" data-tab="overview" role="tab" type="button">Overview</button>
-    <button class="tab" data-tab="bus" role="tab" type="button">Bus &amp; Diagnostics</button>
-    <button class="tab" data-tab="ledger" role="tab" type="button">Ledger</button>
-    <button class="tab" data-tab="payments" role="tab" type="button">Payments</button>
-    <button class="tab" data-tab="telemetry" role="tab" type="button">Telemetry</button>
-    <button class="tab" data-tab="audit" role="tab" type="button">Audit &amp; Lint</button>
+    <button class="tab on" data-tab="overview" role="tab" type="button"><span class="tab-ico">◈</span>Overview</button>
+    <button class="tab" data-tab="bus" role="tab" type="button"><span class="tab-ico">⇄</span>Bus &amp; Diagnostics</button>
+    <button class="tab" data-tab="ledger" role="tab" type="button"><span class="tab-ico">▤</span>Ledger</button>
+    <button class="tab" data-tab="payments" role="tab" type="button"><span class="tab-ico">▣</span>Payments</button>
+    <button class="tab" data-tab="telemetry" role="tab" type="button"><span class="tab-ico">∿</span>Telemetry</button>
+    <button class="tab" data-tab="audit" role="tab" type="button"><span class="tab-ico">⛓</span>Audit &amp; Lint</button>
   </nav>
 
   <main>
@@ -41,10 +44,11 @@
       <div class="stat-strip">
         <div class="stat"><span class="stat-label">safety state</span><span id="stat-safety" class="stat-value">NORMAL</span></div>
         <div class="stat"><span class="stat-label">conservation</span><span id="stat-conservation" class="stat-value ok">PROVEN</span></div>
-        <div class="stat"><span class="stat-label">agent consensus</span><span id="stat-consensus" class="stat-value">—</span></div>
+        <div class="stat"><span class="stat-label">runtime consensus</span><span id="stat-consensus" class="stat-value">—</span></div>
         <div class="stat"><span class="stat-label">audit chain</span><span id="stat-audit" class="stat-value ok">VALID</span></div>
         <div class="stat"><span class="stat-label">bus crc drops</span><span id="stat-crc" class="stat-value">0</span></div>
         <div class="stat"><span class="stat-label">ledger txns</span><span id="stat-txns" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">factory rounds</span><span id="stat-rounds" class="stat-value">—</span></div>
       </div>
 
       <div class="grid-2">
@@ -85,17 +89,47 @@
           </div>
         </div>
       </div>
+
+      <!-- ---------------- 4-AGENT ORCHESTRATION GRAPH (build-time) ---------------- -->
+      <div class="card orch-card" id="orch-card">
+        <div class="card-head">
+          <h2>FACTORY ORCHESTRATION <span class="muted">· 4-AGENT PIPELINE</span></h2>
+          <span class="orch-meta" id="orch-meta">loading room export…</span>
+        </div>
+        <div id="orch-graph" class="orch-graph"></div>
+        <div id="orch-seat-detail" class="orch-detail"></div>
+        <div class="orch-lower">
+          <div class="orch-sub">
+            <div class="sub-head">STAGE RUNS · VERDICT TIMELINE <span class="muted">click a stage</span></div>
+            <div id="orch-stages" class="stage-row"></div>
+            <div id="orch-stage-detail" class="stage-detail"></div>
+          </div>
+          <div class="orch-sub">
+            <div class="sub-head">DEFECTS CAUGHT BEFORE SHIP <span class="muted">2 by review · 1 by cold-room run</span></div>
+            <div id="orch-defects" class="defect-list"></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============================================ BUS & DIAGNOSTICS -->
     <section id="tab-bus" class="panel">
+      <div class="stat-strip" id="bus-health">
+        <div class="stat"><span class="stat-label">frames sent</span><span class="stat-value" id="bh-sent">0</span></div>
+        <div class="stat"><span class="stat-label">delivered</span><span class="stat-value" id="bh-delivered">0</span></div>
+        <div class="stat"><span class="stat-label">crc dropped</span><span class="stat-value ok" id="bh-crc">0</span></div>
+        <div class="stat"><span class="stat-label">in flight</span><span class="stat-value" id="bh-inflight">0</span></div>
+        <div class="stat"><span class="stat-label">bus health</span><span class="stat-value ok" id="bh-health">NOMINAL</span></div>
+      </div>
       <div class="grid-2">
         <div class="card" id="bus-card">
           <div class="card-head"><h2>CAN-FD BUS</h2><span id="bus-sub" class="muted"></span></div>
+          <div class="table-scroll">
           <table class="data-table">
             <thead><tr><th>frame id</th><th>message</th><th>domain</th><th>prio</th><th>dlc</th><th>crc8</th></tr></thead>
             <tbody id="bus-frames"></tbody>
           </table>
+          </div>
           <div class="kv" id="bus-counters">
             <div><span class="k">sent</span><span class="v" id="bus-sent">0</span></div>
             <div><span class="k">delivered</span><span class="v" id="bus-delivered">0</span></div>
@@ -131,6 +165,11 @@
 
     <!-- ==================================================== LEDGER -->
     <section id="tab-ledger" class="panel">
+      <div class="banner" id="ledger-banner">
+        <span class="banner-tag">DOUBLE ENTRY</span>
+        <span>Σ debits = Σ credits · integer minor units · users can never go negative · replays decided before funds</span>
+        <span id="ledger-conservation" class="banner-state ok">CONSERVATION PROVEN</span>
+      </div>
       <div class="grid-2">
         <div class="card">
           <div class="card-head"><h2>ACCOUNTS</h2><button id="refresh-accounts" class="btn" type="button">Refresh</button></div>
@@ -149,7 +188,7 @@
               <select id="to-select" class="select" required></select>
             </label>
             <label>amount (e.g. "12.50")
-              <input id="amount" name="amount" class="input" placeholder='{"amount":"12.50"}' required />
+              <input id="amount" name="amount" class="input" placeholder="12.50" required />
             </label>
             <label>externalId
               <input id="external-id" name="externalId" class="input" placeholder="demo-1" required />
@@ -165,18 +204,24 @@
       </div>
       <div class="card">
         <div class="card-head"><h2>TRANSACTIONS</h2><button id="refresh-txns" class="btn" type="button">Refresh</button></div>
+        <div class="table-scroll">
         <table class="data-table">
           <thead><tr><th>id</th><th>externalId</th><th>from → to</th><th>amount</th></tr></thead>
           <tbody id="txn-body"></tbody>
         </table>
+        </div>
       </div>
     </section>
 
     <!-- ================================================== PAYMENTS -->
     <section id="tab-payments" class="panel">
+      <div class="card">
+        <div class="card-head"><h2>PAYMENT LIFECYCLE</h2><span class="muted">authorize → escrow hold → capture | void | refund</span></div>
+        <div id="pay-lifecycle" class="lifecycle"></div>
+      </div>
       <div class="grid-2">
         <div class="card">
-          <div class="card-head"><h2>PAYMENT LIFECYCLE</h2><span class="muted">authorize → capture | void → refund</span></div>
+          <div class="card-head"><h2>AUTHORIZE</h2><span class="muted">funds held in escrow until captured</span></div>
           <form id="payment-form">
             <label>customer
               <select id="customer-select" class="select"></select>
@@ -209,10 +254,11 @@
       <div class="grid-2">
         <div class="card">
           <div class="card-head"><h2>TRACE SPANS <span class="muted">(OTel-shaped)</span></h2><a class="btn" href="/telemetry/otlp" target="_blank" rel="noreferrer">raw OTLP/JSON</a></div>
-          <table class="data-table">
+          <table class="data-table spans">
             <thead><tr><th>span</th><th>status</th><th>duration</th></tr></thead>
             <tbody id="span-body"></tbody>
           </table>
+          <div class="muted span-hint">click a span to inspect its raw JSON below</div>
         </div>
         <div class="card" id="stream-card">
           <div class="card-head"><h2>LIVE STREAM</h2>
@@ -225,20 +271,35 @@
           <div class="muted" id="stream-count">0 events</div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-head"><h2>RAW SPAN JSON <span class="muted">· W3C trace context · OTLP/JSON</span></h2>
+          <span><button id="otel-refresh" class="btn" type="button">Refresh export</button></span>
+        </div>
+        <pre id="otel-json" class="console json">loading trace export…</pre>
+      </div>
     </section>
 
     <!-- ============================================== AUDIT & LINT -->
     <section id="tab-audit" class="panel">
+      <div class="stat-strip" id="audit-health">
+        <div class="stat"><span class="stat-label">chain entries</span><span class="stat-value" id="ah-entries">0</span></div>
+        <div class="stat"><span class="stat-label">chain status</span><span class="stat-value ok" id="ah-status">VALID</span></div>
+        <div class="stat"><span class="stat-label">conformance</span><span class="stat-value ok" id="ah-conformance">—</span></div>
+        <div class="stat"><span class="stat-label">lint errors</span><span class="stat-value ok" id="ah-errors">0</span></div>
+        <div class="stat"><span class="stat-label">chain head</span><span class="stat-value mono-sm" id="ah-head">—</span></div>
+      </div>
       <div class="card">
         <div class="card-head audit-banner">
-          <h2>TAMPER-EVIDENT AUDIT CHAIN</h2>
+          <h2>TAMPER-EVIDENT AUDIT CHAIN <span class="muted">· SHA-256 over canonical JSON</span></h2>
           <span><span id="audit-dot" class="dot"></span><span id="audit-text" class="muted">…</span>
           <button id="refresh-audit" class="btn" type="button">Refresh</button></span>
         </div>
+        <div class="table-scroll">
         <table class="data-table">
           <thead><tr><th>seq</th><th>at</th><th>type</th><th>payload</th></tr></thead>
           <tbody id="audit-body"></tbody>
         </table>
+        </div>
       </div>
       <div class="card" id="lint-card">
         <div class="card-head"><h2>QUALITY GATE <span class="muted">(custom linter + conformance)</span></h2><span id="lint-status" class="muted">…</span></div>
@@ -249,6 +310,22 @@
   </main>
 
   <div id="toast" class="toast"></div>
+
+  <!-- ==================== CINEMATIC DEMO HUD ==================== -->
+  <div id="demo-overlay" class="demo-overlay" aria-hidden="true">
+    <div class="demo-hud">
+      <div class="demo-hud-left">
+        <span class="demo-badge"><span class="rec-dot"></span>LIVE DEMO</span>
+        <span id="demo-count" class="demo-count">STEP 0/0</span>
+        <span id="demo-tab" class="demo-tab">overview</span>
+      </div>
+      <div class="demo-hud-mid">
+        <div id="demo-title" class="demo-title">ready</div>
+        <div class="demo-bar"><i id="demo-bar"></i></div>
+      </div>
+      <button id="demo-stop" class="btn danger" type="button">■ Stop</button>
+    </div>
+  </div>
 
   <script src="/ui/app.js"></script>
 </body>

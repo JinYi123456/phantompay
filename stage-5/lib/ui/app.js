@@ -127,9 +127,14 @@ const state = {
   safety: { state: 'NORMAL', stats: null },
   accounts: [],
   payments: [],
+  spans: [],
   lastTick: null,
   refusals: 0,
   consensus: null,
+  rounds: null,
+  factory: null,
+  factorySeat: null,
+  factoryStage: null,
   streamEvents: 0,
   demoRunning: false,
 };
@@ -139,11 +144,20 @@ const state = {
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('on', tab.dataset.tab === name));
   document.querySelectorAll('.panel').forEach((panel) => panel.classList.toggle('on', panel.id === `tab-${name}`));
+  const hud = $('#demo-tab');
+  if (hud && state.demoRunning) hud.textContent = name;
 }
 
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => switchTab(tab.dataset.tab));
 });
+
+/* Deep link: /?tab=bus or /#ledger opens straight to a pane (handy for the
+   demo recording and for sharing a single view). */
+(() => {
+  const requested = (new URLSearchParams(location.search).get('tab') || location.hash.replace('#', '')).trim();
+  if (requested && document.querySelector(`.tab[data-tab="${requested}"]`)) switchTab(requested);
+})();
 
 /* =========================================================== render: safety */
 
@@ -195,6 +209,12 @@ function renderTick(tick) {
   conservation.textContent = tick.conservation ? 'PROVEN' : 'VIOLATED';
   conservation.className = `stat-value ${tick.conservation ? 'ok' : 'bad'}`;
 
+  const banner = $('#ledger-conservation');
+  if (banner) {
+    banner.textContent = tick.conservation ? 'CONSERVATION PROVEN' : 'CONSERVATION VIOLATED';
+    banner.className = `banner-state ${tick.conservation ? 'ok' : 'bad'}`;
+  }
+
   const auditDot = $('#health-dot');
   const auditText = $('#health-text');
   auditDot.className = `dot ${tick.auditValid ? 'ok' : 'bad'}`;
@@ -240,6 +260,26 @@ function renderTxns(transactions) {
     .join('') || '<tr><td colspan="4" class="mut">no transactions</td></tr>';
 }
 
+const LIFECYCLE = ['authorize', 'capture', 'void / refund'];
+
+function renderLifecycle() {
+  const host = $('#pay-lifecycle');
+  if (!host) return;
+  const newest = state.payments[state.payments.length - 1];
+  const status = newest ? newest.status : null;
+  const reached = new Set(['authorize']);
+  if (status && status !== 'authorized' && status !== 'voided' && status !== 'expired') reached.add('capture');
+  if (status === 'voided' || status === 'expired' || status === 'refunded' || status === 'partially_refunded') reached.add('void / refund');
+  host.innerHTML = LIFECYCLE
+    .map((label, index) => {
+      const hot = reached.has(label);
+      const voidish = label === 'void / refund' && (status === 'voided' || status === 'expired');
+      const arrow = index ? '<span class="lc-arrow">→</span>' : '';
+      return `${arrow}<span class="lc-step${hot ? ' hot' : ''}${voidish ? ' void' : ''}">${esc(label)}</span>`;
+    })
+    .join('');
+}
+
 function renderPayments() {
   $('#pay-body').innerHTML = state.payments
     .map((payment) => {
@@ -257,6 +297,7 @@ function renderPayments() {
       return `<tr><td class="mut">${esc(payment.id)}</td><td class="${statusClass}">${esc(payment.status)}</td><td>${esc(minorToDecimalString(payment.amount))}</td><td class="mut">${esc(minorToDecimalString(payment.capturedAmountMinor))}</td><td>${ops.join(' ')}</td></tr>`;
     })
     .join('') || '<tr><td colspan="5" class="mut">no payments</td></tr>';
+  renderLifecycle();
 }
 
 function renderBus(payload) {
@@ -270,14 +311,45 @@ function renderBus(payload) {
   $('#bus-frames').innerHTML = (payload.frames || [])
     .map((frame) => `<tr><td class="mut">#${frame.id}</td><td>${esc(frame.messageId)}</td><td class="mut">${esc(frame.domain)}</td><td class="mut">0x${Number(frame.priority & 0xfff).toString(16)}</td><td class="mut">${frame.dlc}B</td><td class="green">${esc(frame.crc8)}</td></tr>`)
     .join('');
+
+  const crc = stats.crcDropped || 0;
+  const setText = (id, value, cls) => {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = value;
+    if (cls) el.className = cls;
+  };
+  setText('#bh-sent', stats.sent || 0);
+  setText('#bh-delivered', stats.delivered || 0);
+  setText('#bh-crc', crc, `stat-value ${crc ? 'warn' : 'ok'}`);
+  setText('#bh-inflight', stats.inFlight || 0);
+  const healthy = crc === 0 && (stats.unknownClassDropped || 0) === 0;
+  setText('#bh-health', healthy ? 'NOMINAL' : 'CRC DROP SEEN', `stat-value ${healthy ? 'ok' : 'warn'}`);
 }
 
 function renderSpans(spans) {
-  $('#span-body').innerHTML = (spans || [])
+  state.spans = spans || [];
+  $('#span-body').innerHTML = state.spans
     .slice()
     .reverse()
-    .map((span) => `<tr><td>${esc(span.name)}</td><td class="${span.status === 'ERROR' ? 'red' : 'green'}">${esc(span.status)}</td><td class="mut">${span.durationMs == null ? '…' : `${span.durationMs.toFixed(3)}ms`}</td></tr>`)
+    .map((span) => `<tr data-span-id="${esc(span.spanId)}"><td>${esc(span.name)}</td><td class="${span.status === 'ERROR' ? 'red' : 'green'}">${esc(span.status)}</td><td class="mut">${span.durationMs == null ? '…' : `${span.durationMs.toFixed(3)}ms`}</td></tr>`)
     .join('') || '<tr><td colspan="3" class="mut">no spans yet</td></tr>';
+}
+
+function renderOtelJson(payload) {
+  const host = $('#otel-json');
+  if (!host) return;
+  const spans = (payload && payload.spans) || state.spans || [];
+  const newest = spans[spans.length - 1];
+  host.textContent = JSON.stringify(
+    {
+      export: 'OTLP/JSON · resourceSpans → scopeSpans → spans',
+      stats: (payload && payload.stats) || null,
+      latestSpan: newest || null,
+    },
+    null,
+    2
+  );
 }
 
 function renderAudit(page) {
@@ -291,6 +363,16 @@ function renderAudit(page) {
   $('#audit-text').textContent = valid
     ? `chain valid · ${page.verification.length} entries · head ${page.head.slice(0, 10)}…`
     : `BROKEN at seq ${page.verification.firstBrokenSeq}`;
+
+  const setText = (id, value, cls) => {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = value;
+    if (cls) el.className = cls;
+  };
+  setText('#ah-entries', (page.verification && page.verification.length) || (page.items || []).length);
+  setText('#ah-status', valid ? 'VALID' : 'BROKEN', `stat-value ${valid ? 'ok' : 'bad'}`);
+  setText('#ah-head', `${String(page.head || '').slice(0, 14)}…`, 'stat-value mono-sm');
 }
 
 function renderLint(report) {
@@ -305,6 +387,235 @@ function renderLint(report) {
   $('#lint-findings').textContent = findings.length
     ? findings.map((f) => `${f.severity.toUpperCase()} ${f.file}:${f.line || '-'} ${f.rule} — ${f.message}`).join('\n')
     : 'no findings';
+
+  const setText = (id, value, cls) => {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = value;
+    if (cls) el.className = cls;
+  };
+  setText('#ah-conformance', `${report.summary.conformancePassed}/${report.summary.conformanceRules}`, `stat-value ${report.summary.conformancePassed === report.summary.conformanceRules ? 'ok' : 'bad'}`);
+  setText('#ah-errors', report.summary.errors, `stat-value ${report.summary.errors ? 'bad' : 'ok'}`);
+}
+
+/* ================================================ render: orchestration */
+
+const ORCH_LAYOUT = {
+  'human-in': { x: 78, y: 92, w: 116, h: 66, kind: 'human', label: 'HUMAN', sub: 'dispatch' },
+  architect: { x: 272, y: 92, w: 152, h: 80, kind: 'seat' },
+  implementer: { x: 474, y: 92, w: 152, h: 80, kind: 'seat' },
+  reviewer: { x: 676, y: 92, w: 152, h: 80, kind: 'seat' },
+  verifier: { x: 872, y: 92, w: 152, h: 80, kind: 'seat' },
+  'human-out': { x: 872, y: 252, w: 152, h: 58, kind: 'human', label: 'HUMAN', sub: 'accept' },
+};
+
+const ORCH_EDGE_PATHS = {
+  dispatch: 'M136,92 L196,92',
+  plan: 'M348,92 L398,92',
+  handoff: 'M550,92 L600,92',
+  approve: 'M752,92 L796,92',
+  verify: 'M872,132 L872,223',
+  reject: 'M676,132 C640,190 512,190 474,132',
+  fail: 'M800,130 C764,292 566,292 530,130',
+};
+
+const ORCH_PACKET = {
+  dispatch: { cls: 'v', dur: '3.2s', begin: '0s' },
+  plan: { cls: 'c', dur: '2.4s', begin: '0.2s' },
+  handoff: { cls: 'c', dur: '2.4s', begin: '0.9s' },
+  approve: { cls: '', dur: '2.4s', begin: '1.5s' },
+  verify: { cls: '', dur: '3s', begin: '0.4s' },
+};
+
+const ORCH_LABELS = {
+  dispatch: { x: 166, y: 80, text: 'dispatch', anchor: 'middle' },
+  plan: { x: 373, y: 80, text: 'plan', anchor: 'middle' },
+  handoff: { x: 575, y: 80, text: 'handoff', anchor: 'middle' },
+  approve: { x: 774, y: 80, text: 'approve', anchor: 'middle' },
+  verify: { x: 884, y: 180, text: 'VERIFIED', anchor: 'start' },
+  reject: { x: 575, y: 212, text: 'REJECT → rework', anchor: 'middle' },
+  fail: { x: 665, y: 306, text: 'FAILED → rework (0 this run)', anchor: 'middle' },
+};
+
+function orchNodeSvg(id) {
+  const layout = ORCH_LAYOUT[id];
+  const seat = state.factory ? state.factory.seats.find((s) => s.id === id) : null;
+  const selected = state.factorySeat === id ? ' sel' : '';
+  const { x, y, w, h } = layout;
+  const rx = 12;
+  const parts = [];
+  parts.push(`<g class="orch-node${selected}" data-seat="${esc(id)}" transform="translate(${x},${y})">`);
+  if (layout.kind === 'human') {
+    parts.push(`<rect class="node-box" x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${rx}" fill="#0c1628" stroke="#2b3f63" stroke-width="1.4"/>`);
+    parts.push(`<text class="node-name" x="0" y="-4" text-anchor="middle">${esc(layout.label)}</text>`);
+    parts.push(`<text class="node-role" x="0" y="14" text-anchor="middle">${esc(layout.sub)}</text>`);
+  } else {
+    const accent = seat ? seat.accent : '#38bdf8';
+    parts.push(`<rect class="node-box" x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${rx}" fill="#0d1830" stroke="${accent}" stroke-width="1.5"/>`);
+    parts.push(`<circle cx="${-w / 2 + 26}" cy="0" r="15" fill="rgba(255,255,255,0.04)" stroke="${accent}" stroke-width="1.2"/>`);
+    parts.push(`<text class="node-glyph" x="${-w / 2 + 26}" y="7" text-anchor="middle" fill="${accent}">${esc(seat ? seat.glyph : '')}</text>`);
+    parts.push(`<text class="node-name" x="${-w / 2 + 50}" y="-8">${esc(seat ? seat.name : id)}</text>`);
+    parts.push(`<text class="node-role" x="${-w / 2 + 50}" y="6">${esc(seat ? String(seat.role).toUpperCase() : '')}</text>`);
+    const meta = seat && seat.messages != null ? `${seat.messages} msgs` : '';
+    parts.push(`<text class="node-meta" x="${-w / 2 + 50}" y="22">${esc(meta)}</text>`);
+  }
+  parts.push('</g>');
+  return parts.join('');
+}
+
+function renderOrchGraph() {
+  const host = $('#orch-graph');
+  if (!host) return;
+  const edges = [];
+  const edgeKeys = ['dispatch', 'plan', 'handoff', 'approve', 'verify', 'reject', 'fail'];
+  for (const key of edgeKeys) {
+    const path = ORCH_EDGE_PATHS[key];
+    const feedback = key === 'reject' || key === 'fail';
+    edges.push(`<path id="e-${key}" class="orch-edge ${feedback ? 'feedback' : 'flow'}" d="${path}" stroke="${feedback ? (key === 'reject' ? '#ff5470' : '#7c90b3') : '#24395c'}" opacity="${key === 'fail' ? 0.5 : 0.95}"/>`);
+  }
+  const labels = Object.keys(ORCH_LABELS)
+    .map((key) => {
+      const l = ORCH_LABELS[key];
+      const color = key === 'reject' ? '#ff8aa0' : key === 'fail' ? '#7c90b3' : '#7c90b3';
+      return `<text class="orch-edge-label" x="${l.x}" y="${l.y}" text-anchor="${l.anchor}" fill="${color}">${esc(l.text)}</text>`;
+    })
+    .join('');
+  const packets = Object.keys(ORCH_PACKET)
+    .map((key) => {
+      const p = ORCH_PACKET[key];
+      return `<circle class="packet ${p.cls}" r="3.4"><animateMotion dur="${p.dur}" begin="${p.begin}" repeatCount="indefinite"><mpath href="#e-${key}" xlink:href="#e-${key}"/></animateMotion></circle>`;
+    })
+    .join('');
+  const nodes = ['human-in', 'architect', 'implementer', 'reviewer', 'verifier', 'human-out'].map(orchNodeSvg).join('');
+
+  host.innerHTML = `<svg viewBox="0 0 1000 330" role="img" aria-label="Four-agent factory orchestration graph" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <defs>
+      <linearGradient id="orchbg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0b1425"/><stop offset="1" stop-color="#080d18"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="1000" height="330" rx="12" fill="url(#orchbg)" stroke="#1b2a45"/>
+    ${edges.join('')}
+    ${labels}
+    ${packets}
+    ${nodes}
+    <text class="orch-edge-label" x="16" y="322" fill="#4d5f7e">solid = forward handoff · dashed = rework loop · one human dispatch + one accept per stage</text>
+  </svg>`;
+}
+
+function seatBadge(seat) {
+  const bits = [];
+  if (seat.messages != null) bits.push(`${seat.messages} msgs`);
+  return bits.join(' · ');
+}
+
+function renderSeatDetail() {
+  const host = $('#orch-seat-detail');
+  if (!host) return;
+  const data = state.factory;
+  if (!data) {
+    host.innerHTML = '<div class="muted">loading factory graph…</div>';
+    return;
+  }
+  const id = state.factorySeat;
+  if (!id) {
+    const s = data.stats || {};
+    const v = (s.verdicts) || {};
+    host.innerHTML = `<div class="od-head"><span class="od-name">PIPELINE</span><span class="od-role">DISPATCH → PLAN → IMPLEMENT → REVIEW → VERIFY → ACCEPT</span></div>
+      <div class="od-body">
+        <span>Every stage: <b>1 human dispatch</b> and <b>1 human accept</b>. Everything between them is seat work.</span>
+        <span>Room totals: <b>${s.messageCount || '—'}</b> messages · <b>${s.humanMessages || '—'}</b> human · <b>${v.REJECT || 0}</b> REJECT · <b>${v.APPROVE || 0}</b> APPROVE · <b>${v.VERIFIED || 0}</b> VERIFIED · <b>${s.testsCertified || '—'}</b> tests certified.</span>
+        <span class="muted">Click a seat node for its mandate, or a stage chip below for its verdict trace.</span>
+      </div>`;
+    return;
+  }
+  if (id === 'human-in' || id === 'human-out') {
+    host.innerHTML = `<div class="od-head"><span class="od-name">HUMAN</span><span class="od-role">${id === 'human-in' ? 'TASK DISPATCH' : 'ACCEPT DECISION'}</span></div>
+      <div class="od-body"><span>${id === 'human-in' ? 'One dispatch message per stage — all task detail enters the room here; the mandates carry none.' : 'One accept decision per stage, posted only after the Verifier posts VERIFIED.'}</span></div>`;
+    return;
+  }
+  const seat = data.seats.find((s) => s.id === id);
+  if (!seat) return;
+  host.innerHTML = `<div class="od-head">
+      <span class="od-name" style="color:${esc(seat.accent)}">${esc(seat.glyph)} ${esc(seat.name)}</span>
+      <span class="od-role">${esc(seat.role)}</span>
+      <span class="od-tag">${esc(seat.mandate)}</span>
+      <span class="od-tag">${esc(seatBadge(seat))}</span>
+    </div>
+    <div class="od-body">
+      <span>${esc(seat.tagline)}</span>
+      <ul class="od-owns">${seat.owns.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>
+    </div>`;
+}
+
+function renderStages() {
+  const host = $('#orch-stages');
+  if (!host) return;
+  const data = state.factory;
+  const stages = (data && data.stages) || [];
+  if (!stages.length) {
+    host.innerHTML = '<div class="muted">no stage data in this checkout</div>';
+    return;
+  }
+  host.innerHTML = stages
+    .map((s) => {
+      const selected = state.factoryStage === s.stage ? ' sel' : '';
+      const shortCommit = String(s.commit || '').split(' ')[0];
+      const rej = s.rejections ? `<div class="sc-rej-line">⚠ ${s.rejections} REJECT</div>` : '';
+      return `<div class="stage-chip${selected}" data-stage="${s.stage}">
+        <div class="sc-top"><span class="sc-stage">STAGE ${s.stage}</span><span class="vbadge ${String(s.verdict).toLowerCase()}">${esc(s.verdict)}</span></div>
+        <div class="sc-tests">${s.tests}<span class="sc-sub"> tests</span></div>
+        <div class="sc-sub">${esc(s.wallClock || '')} · ${esc(shortCommit)}</div>
+        ${rej}
+      </div>`;
+    })
+    .join('');
+  renderStageDetail();
+}
+
+function renderStageDetail() {
+  const host = $('#orch-stage-detail');
+  if (!host) return;
+  const data = state.factory;
+  const stage = data && data.stages.find((s) => s.stage === state.factoryStage);
+  if (!stage) {
+    host.innerHTML = '<span class="muted">click a stage for its verdict trace</span>';
+    return;
+  }
+  const trace = stage.verdicts
+    .map((v) => `<span class="vbadge ${v.verdict}">${esc(v.verdict.toUpperCase())}</span><span class="muted">seq ${v.seq} · ${esc(v.from)}</span>`)
+    .join(' <span class="muted">→</span> ');
+  host.innerHTML = `STAGE ${stage.stage} · dispatch seq <b>${stage.dispatchSeq}</b> → verdict seq <b>${stage.verdictSeq}</b> · <b>${stage.tests}</b> tests · ${esc(stage.review || '')} · commit <b>${esc(stage.commit || '')}</b><br>${trace}`;
+}
+
+function renderDefects() {
+  const host = $('#orch-defects');
+  if (!host) return;
+  const data = state.factory;
+  const defects = (data && data.defects) || [];
+  host.innerHTML = defects
+    .map((d) => `<div class="defect k-${esc(d.kind)}">
+      <div class="d-top"><span class="d-title">${esc(d.title)}</span><span class="d-gate">STAGE ${d.stage} · ${esc(d.caughtBy)} · ${esc(d.gate)}-gate</span></div>
+      <div class="d-body">${esc(d.detail)}</div>
+      <div class="d-fix">${esc(d.fix)}</div>
+    </div>`)
+    .join('') || '<div class="muted">no defect data</div>';
+}
+
+function renderFactory() {
+  const data = state.factory;
+  if (!data) return;
+  const meta = $('#orch-meta');
+  if (meta) {
+    const s = data.stats;
+    meta.textContent = data.available && s
+      ? `${data.room.name} · ${s.stages} stages · ${s.testsCertified} tests certified · source ${data.source}`
+      : data.note;
+  }
+  renderOrchGraph();
+  renderSeatDetail();
+  renderStages();
+  renderDefects();
 }
 
 /* ================================================================= loaders */
@@ -341,6 +652,13 @@ async function loadBus() {
 async function loadSpans() {
   const { body } = await api('GET', '/telemetry?limit=30');
   renderSpans(body.spans);
+  renderOtelJson(body);
+}
+
+async function loadOtelJson() {
+  const { body } = await api('GET', '/telemetry?limit=50');
+  renderSpans(body.spans);
+  renderOtelJson(body);
 }
 
 async function loadAudit() {
@@ -351,6 +669,12 @@ async function loadAudit() {
 async function loadLint() {
   const { body } = await api('GET', '/lint?fresh=1');
   renderLint(body);
+}
+
+async function loadFactory() {
+  const { body } = await api('GET', '/factory');
+  state.factory = body;
+  renderFactory();
 }
 
 /* ============================================================== SSE stream */
@@ -467,12 +791,11 @@ $('#storm-btn').addEventListener('click', async () => {
 
 $('#payment-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const { status, body } = await api('POST', '/payments', {
-    customerId: $('#customer-select').value,
-    merchantAccountId: $('#merchant-select').value,
-    amount: $('#pay-amount').value.trim(),
-    externalId: $('#pay-external').value.trim(),
-  });
+  await authorizeFlow($('#customer-select').value, $('#merchant-select').value, $('#pay-amount').value.trim(), $('#pay-external').value.trim());
+});
+
+async function authorizeFlow(customerId, merchantAccountId, amount, externalId) {
+  const { status, body } = await api('POST', '/payments', { customerId, merchantAccountId, amount, externalId });
   if (status === 201 || status === 200) {
     sfx.success();
     toast(`payment ${body.idempotentReplay ? 'replayed' : 'authorized'}`);
@@ -480,13 +803,14 @@ $('#payment-form').addEventListener('submit', async (event) => {
     $('#payment-result').textContent = `${body.id} ${body.status} hold tx ${body.holdTransactionId}`;
     loadPayments();
     loadAccounts();
-  } else {
-    sfx.alarm();
-    toast(`authorize rejected: ${body.error ? body.error.code : status}`, true);
-    $('#payment-result').className = 'result err';
-    $('#payment-result').textContent = body.error ? body.error.message : `status ${status}`;
+    return body;
   }
-});
+  sfx.alarm();
+  toast(`authorize rejected: ${body.error ? body.error.code : status}`, true);
+  $('#payment-result').className = 'result err';
+  $('#payment-result').textContent = body.error ? body.error.message : `status ${status}`;
+  return null;
+}
 
 document.addEventListener('click', async (event) => {
   const button = event.target && event.target.closest ? event.target.closest('.pay-op') : null;
@@ -506,8 +830,15 @@ document.addEventListener('click', async (event) => {
 
 /* ============================================================ fault lab */
 
+/** Put a frame on the wire (read a DID → diag.response) and corrupt it
+    before the 2s ticker drains — /bus/fault needs a frame in flight. */
+async function injectCrcFault() {
+  await api('POST', '/uds', { sid: '0x22', did: '0xF101' });
+  return api('POST', '/bus/fault');
+}
+
 $('#inject-crc').addEventListener('click', async () => {
-  const { status, body } = await api('POST', '/bus/fault');
+  const { status, body } = await injectCrcFault();
   if (status === 201) {
     sfx.alarm();
     toast(`frame #${body.mutatedFrameId} corrupted in flight - dropped at the CRC-8 gate`);
@@ -529,9 +860,7 @@ $('#fault-critical').addEventListener('click', async () => {
 
 $('#verify-round').addEventListener('click', async () => {
   const { body } = await api('POST', '/verify?trigger=ui');
-  state.consensus = body.round.consensus;
-  $('#stat-consensus').textContent = body.round.consensus;
-  $('#stat-consensus').className = `stat-value ${body.round.consensus === 'unanimous' ? 'ok' : 'bad'}`;
+  applyConsensus(body.round.consensus);
   if (body.round.consensus === 'unanimous') {
     sfx.success();
     toast(`verification round ${body.round.seq}: unanimous (${body.round.results.length} agents)`);
@@ -541,6 +870,15 @@ $('#verify-round').addEventListener('click', async () => {
   }
   loadSafety();
 });
+
+function applyConsensus(consensus) {
+  state.consensus = consensus;
+  const el = $('#stat-consensus');
+  if (el) {
+    el.textContent = consensus;
+    el.className = `stat-value ${consensus === 'unanimous' ? 'ok' : 'bad'}`;
+  }
+}
 
 /* ============================================================ recovery */
 
@@ -590,84 +928,301 @@ document.querySelectorAll('.uds-btn').forEach((button) => {
 });
 $('#uds-read').addEventListener('click', () => udsRequest({ sid: '0x22', did: $('#uds-did').value }));
 
+/* ============================================ orchestration interactions */
+
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!target || !target.closest) return;
+  const node = target.closest('.orch-node');
+  if (node && node.dataset.seat) {
+    state.factorySeat = state.factorySeat === node.dataset.seat ? null : node.dataset.seat;
+    renderOrchGraph();
+    renderSeatDetail();
+    return;
+  }
+  const chip = target.closest('.stage-chip');
+  if (chip && chip.dataset.stage) {
+    state.factoryStage = Number(chip.dataset.stage);
+    renderStages();
+  }
+});
+
+/* ==================================================== telemetry raw JSON */
+
+$('#otel-refresh').addEventListener('click', loadOtelJson);
+
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!target || !target.closest) return;
+  const row = target.closest('tr[data-span-id]');
+  if (!row) return;
+  const span = state.spans.find((s) => s.spanId === row.dataset.spanId);
+  if (!span) return;
+  $('#otel-json').textContent = JSON.stringify(span, null, 2);
+  toast(`span ${span.name} · trace ${String(span.traceId).slice(0, 12)}…`);
+});
+
 /* ========================================================== demo scenario */
 
+/**
+ * Drive the machine out of SAFE_HALT back to NORMAL. A background interval
+ * verification round can fire during the warm-up grace period and relapse a
+ * still-dirty system back into SAFE_HALT (that arc is real), so we retry a
+ * couple of times before giving up.
+ */
+async function recoverToNormal() {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const request = await api('POST', '/safety/recovery', { operator: 'demo' });
+    if (request.status !== 200) {
+      await sleep(350);
+      continue;
+    }
+    await sleep(2200);
+    const complete = await api('POST', '/safety/recovery/complete');
+    await loadSafety();
+    if (complete.status === 200) return true;
+  }
+  return false;
+}
+
+const DEMO_STEPS = [
+  {
+    tab: 'overview',
+    focus: '#orch-card',
+    title: 'Factory orchestration — 4 seats, 41 messages, 2 REJECT → 4 VERIFIED',
+    run: () => loadFactory(),
+    hold: 1700,
+  },
+  {
+    tab: 'overview',
+    focus: '#safety-card',
+    title: 'ASIL-D safety machine armed — clean verification round is unanimous',
+    run: async () => {
+      const { body } = await api('POST', '/verify?trigger=demo');
+      applyConsensus(body.round.consensus);
+      await Promise.all([loadSafety(), loadAccounts(), loadTxns()]);
+    },
+    hold: 1600,
+  },
+  {
+    tab: 'bus',
+    focus: '#bus-card',
+    title: 'Corrupt a CAN-FD frame in flight → CRC-8 frame guard drops it',
+    run: async () => {
+      const { status, body } = await injectCrcFault();
+      await loadBus();
+      if (status !== 201) throw new Error(`no frame in flight to corrupt (${body.error ? body.error.code : status})`);
+    },
+    hold: 1700,
+  },
+  {
+    tab: 'overview',
+    focus: '#stat-consensus',
+    title: 'A dirty bus → frame-guardian dissents → consensus_diverged → SAFE_HALT',
+    run: async () => {
+      const { body } = await api('POST', '/verify?trigger=demo');
+      applyConsensus(body.round.consensus);
+      await loadSafety();
+    },
+    hold: 1900,
+  },
+  {
+    tab: 'bus',
+    focus: '#uds-card',
+    title: 'UDS 0x22 ReadDataByIdentifier · DID 0xF104 → live DTC summary',
+    run: () => udsRequest({ sid: '0x22', did: '0xF104' }),
+    hold: 1800,
+  },
+  {
+    tab: 'overview',
+    focus: '#safety-card',
+    title: 'Operator recovery → warm-up grace → NORMAL, re-verified unanimous',
+    run: async () => {
+      await recoverToNormal();
+      const { body } = await api('POST', '/verify?trigger=demo');
+      applyConsensus(body.round.consensus);
+    },
+    hold: 2600,
+  },
+  {
+    tab: 'ledger',
+    focus: '#transfer-form',
+    title: 'Degraded mode still commits — 7.77 Alice → Bob under guard telemetry',
+    run: async () => {
+      // Top up the demo account so the walkthrough is repeatable (the ledger
+      // moves value, it never mints it — the top-up is a house-treasury
+      // deposit through the normal double-entry path).
+      await api('POST', '/deposits', {
+        externalId: `demo-topup-${Date.now().toString(36)}`,
+        accountId: 'user:alice',
+        amount: '250.00',
+        method: 'bank_transfer',
+      });
+      await api('POST', '/safety/faults', { code: 'demo_degradable', severity: 'degradable', detail: 'demo: guard trip', source: 'demo' });
+      await commitFlow({ sourceAccountId: 'user:alice', destinationAccountId: 'user:bob', amount: '7.77', externalId: `demo-degraded-${Date.now().toString(36)}` }, 'degraded-mode commit accepted');
+      await loadSafety();
+    },
+    hold: 1600,
+  },
+  {
+    tab: 'ledger',
+    focus: '#transfer-result',
+    title: 'Replay the same externalId → at-most-once, no double charge',
+    run: async () => {
+      const externalId = `demo-replay-${Date.now().toString(36)}`;
+      await commitFlow({ sourceAccountId: 'user:alice', destinationAccountId: 'user:bob', amount: '3.00', externalId }, 'transfer committed');
+      await commitFlow({ sourceAccountId: 'user:alice', destinationAccountId: 'user:bob', amount: '3.00', externalId }, 'replay returned the original result');
+    },
+    hold: 1700,
+  },
+  {
+    tab: 'payments',
+    focus: '#payment-form',
+    title: 'Payments: authorize 24.00 → funds held in escrow',
+    run: async () => {
+      await authorizeFlow('user:alice', 'user:bob', '24.00', `demo-pay-${Date.now().toString(36)}`);
+    },
+    hold: 1500,
+  },
+  {
+    tab: 'payments',
+    focus: '#pay-body',
+    title: 'Partial capture 10.00 → escrow remainder held; void a second 12.00 hold',
+    run: async () => {
+      const latest = state.payments[state.payments.length - 1];
+      if (latest && latest.status === 'authorized') {
+        await api('POST', `/payments/${latest.id}/capture`, { amount: '10.00' });
+      }
+      const second = await authorizeFlow('user:alice', 'user:bob', '12.00', `demo-void-${Date.now().toString(36)}`);
+      if (second && second.id) {
+        await api('POST', `/payments/${second.id}/void`, {});
+      }
+      await Promise.all([loadPayments(), loadAccounts()]);
+    },
+    hold: 1800,
+  },
+  {
+    tab: 'telemetry',
+    focus: '#otel-json',
+    title: 'Telemetry: OTel spans with W3C trace context + raw OTLP/JSON export',
+    run: () => loadOtelJson(),
+    hold: 1800,
+  },
+  {
+    tab: 'overview',
+    focus: '#safety-card',
+    title: 'CRITICAL fault → SAFE_HALT: the ledger freezes',
+    run: async () => {
+      await api('POST', '/safety/faults', { code: 'demo_halt', severity: 'critical', detail: 'demo: simulated hard fault', source: 'demo' });
+      await sleep(300);
+      await loadSafety();
+    },
+    hold: 1900,
+  },
+  {
+    tab: 'ledger',
+    focus: '#transfer-result',
+    title: 'Commit attempt refused — 503 safety_transition while halted',
+    run: async () => {
+      await commitFlow({ sourceAccountId: 'user:alice', destinationAccountId: 'user:bob', amount: '5.00', externalId: `demo-refused-${Date.now().toString(36)}` }, 'refused');
+    },
+    hold: 1800,
+  },
+  {
+    tab: 'overview',
+    focus: '#safety-card',
+    title: 'Recovery → NORMAL, then a post-recovery round is unanimous again',
+    run: async () => {
+      await recoverToNormal();
+      const { body } = await api('POST', '/verify?trigger=demo');
+      applyConsensus(body.round.consensus);
+    },
+    hold: 2800,
+  },
+  {
+    tab: 'audit',
+    focus: '#audit-body',
+    title: 'Audit & Lint: SHA-256 hash chain valid · conformance gate all green',
+    run: async () => { await Promise.all([loadAudit(), loadLint()]); },
+    hold: 2400,
+  },
+];
+
+const demo = { running: false, aborted: false };
+
+function highlight(selector) {
+  const el = typeof selector === 'string' ? document.querySelector(selector) : selector;
+  if (!el) return;
+  el.classList.remove('hl');
+  void el.offsetWidth;
+  el.classList.add('hl');
+  try {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch {
+    /* older engines: no smooth scroll */
+  }
+}
+
+function setHud(index, total, step) {
+  const overlay = $('#demo-overlay');
+  overlay.classList.add('on');
+  overlay.setAttribute('aria-hidden', 'false');
+  $('#demo-count').textContent = `STEP ${index + 1}/${total}`;
+  $('#demo-tab').textContent = step.tab;
+  $('#demo-title').textContent = step.title;
+  $('#demo-bar').style.width = `${Math.round((index / total) * 100)}%`;
+}
+
 async function runDemo() {
-  if (state.demoRunning) return;
+  if (demo.running) return;
+  demo.running = true;
+  demo.aborted = false;
   state.demoRunning = true;
   const button = $('#demo-run');
   button.disabled = true;
   button.classList.add('running');
-  const step = async (label, fn) => {
-    toast(label);
-    try {
-      await fn();
-    } catch (err) {
-      toast(`demo step failed: ${err.message}`, true);
-    }
-    await sleep(700);
-  };
-
   sfx.charge();
-  await step('DEMO 1/7 · boot verification round (expect unanimous)', async () => {
-    const { body } = await api('POST', '/verify?trigger=demo');
-    $('#stat-consensus').textContent = body.round.consensus;
-    if (body.round.consensus !== 'unanimous') throw new Error('boot round diverged');
-  });
 
-  await step('DEMO 2/7 · corrupt a CAN-FD frame (CRC-8 gate drops it)', async () => {
-    await api('POST', '/bus/fault');
-    await loadBus();
-  });
+  const total = DEMO_STEPS.length;
+  for (let i = 0; i < total; i += 1) {
+    if (demo.aborted) break;
+    const step = DEMO_STEPS[i];
+    setHud(i, total, step);
+    if (step.tab) switchTab(step.tab);
+    if (step.focus) highlight(step.focus);
+    try {
+      await step.run();
+    } catch (err) {
+      toast(`demo step failed: ${err && err.message ? err.message : err}`, true);
+    }
+    if (demo.aborted) break;
+    $('#demo-bar').style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+    await sleep(step.hold || 1200);
+  }
 
-  await step('DEMO 3/7 · degraded mode still commits (7.77 alice→bob)', async () => {
-    await commitFlow({ sourceAccountId: 'user:alice', destinationAccountId: 'user:bob', amount: '7.77', externalId: `demo-degraded-${Date.now().toString(36)}` }, 'degraded-mode commit accepted');
-  });
-
-  await step('DEMO 4/7 · critical fault → SAFE_HALT (money freezes)', async () => {
-    await api('POST', '/safety/faults', { code: 'demo_halt', severity: 'critical', detail: 'demo: simulated hard fault', source: 'demo' });
-    await sleep(300);
-    await loadSafety();
-    if (state.safety.state !== 'SAFE_HALT') throw new Error(`expected SAFE_HALT, got ${state.safety.state}`);
-  });
-
-  await step('DEMO 5/7 · commit attempt refused (503 safety_transition)', async () => {
-    const { status } = await api('POST', '/transfers', {
-      sourceAccountId: 'user:alice',
-      destinationAccountId: 'user:bob',
-      amount: '5.00',
-      externalId: `demo-refused-${Date.now().toString(36)}`,
-    });
-    if (status !== 503) throw new Error(`expected 503, got ${status}`);
-    state.refusals += 1;
-    $('#refusals').textContent = state.refusals;
-    sfx.alarm();
-  });
-
-  await step('DEMO 6/7 · operator recovery + grace period', async () => {
-    const request = await api('POST', '/safety/recovery', { operator: 'demo' });
-    if (request.status !== 200) throw new Error('recovery request refused');
-    await loadSafety();
-    await sleep(2300);
-    const complete = await api('POST', '/safety/recovery/complete');
-    if (complete.status !== 200) throw new Error('recovery completion refused');
-  });
-
-  await step('DEMO 7/7 · post-recovery verification round', async () => {
-    const { body } = await api('POST', '/verify?trigger=demo');
-    $('#stat-consensus').textContent = body.round.consensus;
-    if (body.round.consensus !== 'unanimous') throw new Error('post-recovery round diverged');
-  });
-
-  await Promise.all([loadSafety(), loadAccounts(), loadTxns(), loadBus(), loadAudit(), loadSpans()]);
+  await Promise.all([loadSafety(), loadAccounts(), loadTxns(), loadBus(), loadAudit(), loadSpans(), loadPayments()]);
   sfx.success();
-  toast('DEMO COMPLETE · every gate exercised: CRC drop, degraded commit, hard halt, refused commit, recovery, unanimous consensus');
+  if (demo.aborted) {
+    toast('demo stopped');
+  } else {
+    toast('DEMO COMPLETE · every gate exercised: CRC drop, consensus halt, degraded commit, escrow lifecycle, hard halt + refusal, recovery, unanimous re-verify');
+  }
+  demo.running = false;
   state.demoRunning = false;
   button.disabled = false;
   button.classList.remove('running');
+  setTimeout(() => {
+    const overlay = $('#demo-overlay');
+    overlay.classList.remove('on');
+    overlay.setAttribute('aria-hidden', 'true');
+  }, 3200);
 }
 
 $('#demo-run').addEventListener('click', runDemo);
+$('#demo-stop').addEventListener('click', () => {
+  demo.aborted = true;
+  toast('stopping demo…');
+});
 
 /* ============================================================ refreshers */
 
@@ -690,15 +1245,22 @@ $('#audio-toggle').addEventListener('click', () => {
 
 (async function boot() {
   startStream();
-  await Promise.all([loadSafety(), loadAccounts(), loadTxns(), loadPayments(), loadBus(), loadSpans(), loadAudit(), loadLint()]);
+  await Promise.all([loadSafety(), loadAccounts(), loadTxns(), loadPayments(), loadBus(), loadSpans(), loadAudit(), loadLint(), loadFactory()]);
   const { body } = await api('GET', '/health');
   if (body.conservation !== undefined) {
     $('#stat-conservation').textContent = body.conservation ? 'PROVEN' : 'VIOLATED';
   }
   if (body.agents) {
-    state.consensus = body.agents.consensus;
-    $('#stat-consensus').textContent = body.agents.consensus || '—';
-    $('#stat-consensus').className = `stat-value ${body.agents.consensus === 'unanimous' ? 'ok' : 'muted'}`;
+    applyConsensus(body.agents.consensus || '—');
+    state.rounds = body.agents.rounds;
+    const roundsEl = $('#stat-rounds');
+    if (roundsEl) roundsEl.textContent = body.agents.rounds == null ? '—' : body.agents.rounds;
   }
   setInterval(() => { loadBus(); loadSpans(); }, 6000);
+
+  // Auto-run for hands-free recording: open /?demo=1 and the walkthrough
+  // starts on its own a moment after boot.
+  if (new URLSearchParams(location.search).get('demo') === '1') {
+    setTimeout(runDemo, 1200);
+  }
 })();
