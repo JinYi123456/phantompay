@@ -1,0 +1,21 @@
+[project]
+name = "phantompay"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "JinYi123456", email = "boonjy2725@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "band-sdk[langgraph]>=4.0.0",
+    "langchain-openai>=1.6.7",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+phantompay = "phantompay:main"
+
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
