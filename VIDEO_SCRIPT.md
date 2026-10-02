@@ -1,15 +1,15 @@
 # VIDEO_SCRIPT.md — PhantomPay demo recording plan
 
-Target length: **2.5–3 minutes**. Two recordings, cut together:
+Target length: **2.5–3 minutes** for the final cut (~3:00). Two recordings, cut
+together — **Take B ≈ 2:00** of product screen, **Take A ≈ 1:00** of room proof:
 
+- **Take B — Product Screen & UI Demo** (`http://localhost:8000`): the complete
+  multi-page command center — Run Demo Scenario, Overview, Bus & Diagnostics,
+  Ledger, Payments, Telemetry, and Audit & Lint.
 - **Take A — Room Recording**: BAND Desktop, the PhantomPay room, showing the
   four agent seats (Architect, Implementer, Reviewer, Verifier), scrolling
   through the timeline, tool calls and execution events. *(This satisfies the
   mandatory room-recording rule.)*
-- **Take B — Product Screen & UI Demo**: terminal + browser
-  (`http://localhost:8000`), demonstrating the complete multi-page command
-  center: Run Demo Scenario, Overview, Bus & Diagnostics, Ledger, Payments,
-  Telemetry, and Audit & Lint.
 
 Record **Take B first, then Take A**. Language: **English** (for the hackathon
 submission). Export 1080p MP4, ≤ 200 MB, named `phantom-pay-demo.mp4`.
@@ -50,9 +50,9 @@ Deep links work too: `/?tab=bus`, `/#ledger`, etc.
 
 ---
 
-## Take B — Product Screen & Live System Demo (2.5–3 minutes)
+## Take B — Product Screen & Live System Demo (~2:00)
 
-1. **Overview & Factory Demo (0:00 – 0:45)**
+1. **Overview & Factory Demo (0:00 – 0:25)**
    - *Screen*: Stay on the **Overview** page. Show the ASIL-D Safety Machine
      and the Fault Lab, then scroll to the **Factory Orchestration** graph —
      the four seats (Architect → Implementer → Reviewer → Verifier) with the
@@ -66,11 +66,11 @@ Deep links work too: `/?tab=bus`, `/#ledger`, etc.
      hard-fault protection. The whole thing was autonomously designed,
      reviewed and verified by our four agent seats in BAND — that's the
      orchestration graph: four seats, forty-one messages, two rejections and
-     four cold-room certifications. Press **Run Demo Scenario** and watch it
-     drive fault injection, dynamic degradation and consensus recovery on its
-     own."
+     four cold-room certifications. I'll start the demo and step through it —
+     fault injection, dynamic degradation and consensus recovery, one beat at
+     a time."
 
-2. **Bus & Diagnostics (0:45 – 1:15)**
+2. **Bus & Diagnostics (0:25 – 0:50)**
    - *Screen*: The demo switches to **Bus & Diagnostics**. Show the real-time
      CAN-FD message stream with per-frame CRC-8, then the UDS console reading
      `0xF104 dtcSummary`.
@@ -80,7 +80,7 @@ Deep links work too: `/?tab=bus`, `/#ledger`, etc.
      verification round diverges and the system halts itself. Through the UDS
      terminal we pull the live diagnostic trouble codes straight out."
 
-3. **Ledger Core & Rigorous Protection (1:15 – 1:45)**
+3. **Ledger Core & Rigorous Protection (0:50 – 1:15)**
    - *Screen*: **Ledger** — accounts (Alice & Bob) in integer minor units,
      a transfer, then the same `externalId` replayed to show at-most-once.
    - *Narration*: "In the Ledger we enforce strict double-entry invariants —
@@ -89,7 +89,7 @@ Deep links work too: `/?tab=bus`, `/#ledger`, etc.
      is guarded by an idempotency key: replaying the same request returns the
      original result instead of charging twice."
 
-4. **Payments & Telemetry (1:45 – 2:15)**
+4. **Payments & Telemetry (1:15 – 1:40)**
    - *Screen*: **Payments** (authorize → partial capture → void lifecycle,
      escrow holds visible), then **Telemetry** (expand a span into the raw
      OTLP/JSON view).
@@ -98,7 +98,7 @@ Deep links work too: `/?tab=bus`, `/#ledger`, etc.
      Telemetry gives us OpenTelemetry-compliant distributed trace spans with
      W3C context, and the raw OTLP/JSON export any collector can ingest."
 
-5. **Tamper-Evident Audit & Linter Gate (2:15 – 2:45)**
+5. **Tamper-Evident Audit & Linter Gate (1:40 – 2:00)**
    - *Screen*: **Audit & Lint** — the SHA-256 hash chain (safety transitions,
      recoveries and payments all sealed in one chain) and the conformance
      report, all green (13/13, 0 errors).
@@ -109,9 +109,9 @@ Deep links work too: `/?tab=bus`, `/#ledger`, etc.
 
 ---
 
-## Take A — Room Screen & Process Proof (1 – 1.5 minutes)
+## Take A — Room Screen & Process Proof (~1:00)
 
-1. **The Factory Pipeline (0:00 – 0:40)**
+1. **The Factory Pipeline (0:00 – 0:30)**
    - *Screen*: BAND Desktop, the PhantomPay room. Scroll from the top showing
      the four seats (Architect, Implementer, Reviewer, Verifier) and the
      initial stage dispatches.
@@ -120,7 +120,7 @@ Deep links work too: `/?tab=bus`, `/#ledger`, etc.
      stage task dispatch; the only other human interactions are the acceptance
      sign-offs — one dispatch and one accept per stage."
 
-2. **Adversarial Catches & Verification (0:40 – 1:10)**
+2. **Adversarial Catches & Verification (0:30 – 1:00)**
    - *Screen*: Scroll through the Reviewer's `REJECT` messages (seq 19, seq 84)
      and the Verifier's `VERIFIED` messages (seq 33 / 61 / 92 / 118).
    - *Narration*: "The Reviewer successfully caught real design defects — a

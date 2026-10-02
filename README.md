@@ -141,18 +141,55 @@ agent dissents in the runtime council, and consensus divergence is itself a
 critical fault that halts the machine. Everything — every mutation and every
 agent decision — is sealed into one SHA-256 tamper-evident chain.
 
-## The factory
+## The factory — a BAND 4-agent autonomous workflow
 
-PhantomPay was not hand-written. `FACTORY.md` is the complete build report:
-the four seats and their generic mandates ([mandates/](mandates/)), the
-pipeline (dispatch → plan → implement → review → verify → accept), measured
-costs, and the three real defects the band's gates caught and fixed.
+PhantomPay was not hand-written. It was produced by **four coding-agent seats
+working in one BAND room**, each bound to a *generic* mandate that carries zero
+product detail — no endpoint, field, error code or even the word "payment"
+appears in any of them (the test being that the same four mandates could be
+pointed at another track and still work):
+
+| Seat | Role | Mandate | Verdict |
+|------|------|---------|---------|
+| **Architect** | Planner | [`mandates/architect.md`](mandates/architect.md) | numbered plan + acceptance checklist |
+| **Implementer** | Builder | [`mandates/implementer.md`](mandates/implementer.md) | code + tests + handoff evidence |
+| **Reviewer** | Read gate | [`mandates/reviewer.md`](mandates/reviewer.md) | `REJECT` / `APPROVE` |
+| **Verifier** | Run gate | [`mandates/verifier.md`](mandates/verifier.md) | `VERIFIED` / `FAILED` |
+
+Each stage runs the same pipeline, and **costs the human exactly two messages** —
+the task dispatch and the accept decision. Everything between them is seat work:
+
+```
+human dispatch (one message per stage)
+        │
+        ▼
+  Architect ── plan: numbered requirements + acceptance checklist
+        │
+        ▼
+ Implementer ── code + tests + handoff evidence (commands + transcripts)
+        │
+        ▼
+  Reviewer ── REJECT ──► back to Implementer (numbered blocking findings)
+        │ APPROVE
+        ▼
+  Verifier ── FAILED ──► back to Implementer (failing transcript)
+        │ VERIFIED
+        ▼
+  human decision: accept the stage (the only other human input)
+```
+
+The two gates fail *differently on purpose*: the Reviewer fails work by
+**reading** (logic, missing coverage, contradiction with the plan) while the
+Verifier fails it by **running** (clean checkout, cold start, replayed numbers),
+so a defect that slips one gate rarely slips both. `FACTORY.md` is the complete
+build report — the mandates, the measured costs, and the three real defects the
+gates caught and fixed.
 
 The full room conversation — including the two `REJECT`s and the stage-4
 verify finding — is exported verbatim in
-[`factory/room-export.json`](factory/room-export.json) (41 messages, 8
-human, 2 `REJECT`, 4 `APPROVE`, 4 `VERIFIED`), with the verdict messages
-traceable to the stage commits:
+[`factory/room-export.json`](factory/room-export.json) (41 messages, 8 human,
+2 `REJECT`, 4 `APPROVE`, 4 `VERIFIED`), with every verdict traceable to a stage
+commit:
 
 | Stage | Verdict (seq) | Commit | Wall clock |
 |-------|---------------|--------|-----------:|
