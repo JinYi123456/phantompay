@@ -19,10 +19,14 @@ jobs:
       - name: Test every stage
         run: |
           set -e
-          for d in stage-1 stage-2 stage-3 stage-4; do
+          for d in stage-1 stage-2 stage-3 stage-4 stage-5; do
             if [ -f "$d/package.json" ]; then
               echo "::group:: $d"
               (cd "$d" && npm test)
               echo "::endgroup::"
             fi
           done
+      - name: Stage-5 quality gate (custom linter + conformance)
+        run: |
+          cd stage-5
+          npm run lint

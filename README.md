@@ -14,20 +14,27 @@ complete, buildable service:
 |-------|--------------|------:|------------|
 | [stage-1](stage-1/) | Ledger core + HTTP API | 30 | BigInt minor units, idempotent transfers (replay decided *before* funds), all-or-nothing batches, optimistic locking |
 | [stage-2](stage-2/) | Dark responsive web UI (same process) | 31 | Pure API client, no build step, double-submit guarded forms |
-| [stage-3](stage-3/) | Recurring transfers, deposits/withdrawals, statements | 53 | Exactly-once scheduler with crash-injection tests, instant-precision time windows, stable cursor paging |
-| [stage-4](stage-4/) | Payment lifecycle + tamper-evident audit | 76 | Escrow holds per currency, partial capture/void/refund, TTL expiry (injected clock), SHA-256 hash chain with public `/audit/verify` |
+| [stage-3](stage-3/) | Recurring transfers, deposits/withdrawals, statements | 53 | Exactly-once scheduler with crash-injection tests, instant-precision time windows, stable cursor paging || [stage-4](stage-4/) | Payment lifecycle + tamper-evident audit | 76 | Escrow holds per currency, partial capture/void/refund, TTL expiry (injected clock), SHA-256 hash chain with public `/audit/verify` |
+| [stage-5](stage-5/) | Hard-fault safety layer + command center | 77 | ASIL-D safety supervisor, CAN-FD bus with CRC-8 frame guards, UDS diagnostics, 4-agent consensus verification, custom linter + git pre-commit quality gate, OTel-style telemetry, real-time SSE command center |
 
-76 tests green across the four frozen stages, zero runtime dependencies
-anywhere (`npm install` never runs), and every stage boots offline in a clean
-container with no outbound network.
+267 tests green across the five stages, zero runtime dependencies
+anywhere (`npm install` never runs), and every stage boots offline in a
+clean container with no outbound network.
 
 ## Quickstart (any stage)
 
 ```bash
-cd stage-4          # the fullest build; stage-1..3 work identically
-npm test            # 76/76 pass
+cd stage-5          # the hard-fault edition; stage-1..4 work identically
+npm test            # 77/77 pass
+npm run lint        # custom quality gate: float hygiene + settlement conformance
 npm start           # listens on http://localhost:8080
 ```
+
+Stage 5 fuses the financial core with automotive-style safety: inject a
+critical fault (`POST /safety/faults`), watch the ASIL-D machine halt the
+ledger (`503 safety_transition` on every commit), recover through the
+grace period, and corrupt a CAN-FD frame (`POST /bus/fault`) to see the
+CRC-8 gate drop it — all from the built-in command center's fault lab.
 
 Then:
 

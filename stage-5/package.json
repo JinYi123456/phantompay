@@ -1,0 +1,17 @@
+{
+  "name": "phantom-pay-stage-5",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "PhantomPay stage 5 - hard-fault safety layer: ASIL-D safety state machine, CAN-FD message bus, UDS diagnostics, multi-agent consensus verification, CRC-8 frame guards and a real-time command center (zero-dependency Node.js)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "lint": "node bin/lint.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

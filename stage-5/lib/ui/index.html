@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PhantomPay Stage 5 — Hard-Fault Command Center</title>
+  <link rel="icon" href="/ui/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/ui/ui.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◉</span>
+      <div>
+        <h1>PHANTOM PAY <span class="stage-tag">STAGE 5</span></h1>
+        <p class="brand-sub">HARD-FAULT COMMAND CENTER · FINANCE × AUTOMOTIVE SAFETY</p>
+      </div>
+    </div>
+    <div class="top-status">
+      <span id="safety-chip" class="safety-chip" data-state="NORMAL">NORMAL</span>
+      <span id="health-dot" class="dot" title="audit chain"></span>
+      <span id="health-text" class="muted">booting…</span>
+      <span id="uptime" class="muted">0s</span>
+      <button id="demo-run" class="btn demo-btn" type="button">▶ RUN DEMO SCENARIO</button>
+      <button id="audio-toggle" class="btn audio-btn" type="button" aria-pressed="true" title="toggle sound">&#128266;</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab on" data-tab="overview" role="tab" type="button">Overview</button>
+    <button class="tab" data-tab="bus" role="tab" type="button">Bus &amp; Diagnostics</button>
+    <button class="tab" data-tab="ledger" role="tab" type="button">Ledger</button>
+    <button class="tab" data-tab="payments" role="tab" type="button">Payments</button>
+    <button class="tab" data-tab="telemetry" role="tab" type="button">Telemetry</button>
+    <button class="tab" data-tab="audit" role="tab" type="button">Audit &amp; Lint</button>
+  </nav>
+
+  <main>
+    <!-- ================================================== OVERVIEW -->
+    <section id="tab-overview" class="panel on">
+      <div class="stat-strip">
+        <div class="stat"><span class="stat-label">safety state</span><span id="stat-safety" class="stat-value">NORMAL</span></div>
+        <div class="stat"><span class="stat-label">conservation</span><span id="stat-conservation" class="stat-value ok">PROVEN</span></div>
+        <div class="stat"><span class="stat-label">agent consensus</span><span id="stat-consensus" class="stat-value">—</span></div>
+        <div class="stat"><span class="stat-label">audit chain</span><span id="stat-audit" class="stat-value ok">VALID</span></div>
+        <div class="stat"><span class="stat-label">bus crc drops</span><span id="stat-crc" class="stat-value">0</span></div>
+        <div class="stat"><span class="stat-label">ledger txns</span><span id="stat-txns" class="stat-value">0</span></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card" id="safety-card">
+          <div class="card-head">
+            <h2>ASIL-D SAFETY MACHINE</h2>
+            <span id="safety-sub" class="muted">arcs: NORMAL↔DEGRADED → SAFE_HALT → RECOVERING</span>
+          </div>
+          <div class="state-arc" id="state-arc">
+            <span class="arc-state" data-state="NORMAL">NORMAL</span>
+            <span class="arc-arrow">↔</span>
+            <span class="arc-state" data-state="DEGRADED">DEGRADED</span>
+            <span class="arc-arrow">→</span>
+            <span class="arc-state" data-state="SAFE_HALT">SAFE_HALT</span>
+            <span class="arc-arrow">→</span>
+            <span class="arc-state" data-state="RECOVERING">RECOVERING</span>
+          </div>
+          <div class="fault-list" id="fault-list"></div>
+          <div class="recovery-row">
+            <button id="recovery-request" class="btn" type="button">Request recovery</button>
+            <button id="recovery-complete" class="btn" type="button" disabled>Complete recovery</button>
+            <span id="recovery-timer" class="muted"></span>
+          </div>
+        </div>
+
+        <div class="card" id="fault-card">
+          <div class="card-head"><h2>FAULT LAB</h2><span class="muted">inject faults, watch the gates catch them</span></div>
+          <div class="btn-row">
+            <button id="inject-crc" class="btn warn" type="button">Corrupt CAN-FD frame (CRC)</button>
+            <button id="fault-degradable" class="btn" type="button">Report degradable fault</button>
+            <button id="fault-critical" class="btn danger" type="button">Report critical fault</button>
+            <button id="verify-round" class="btn" type="button">Run verification round</button>
+          </div>
+          <div class="kv" id="fault-notes">
+            <div><span class="k">refused commits</span><span class="v" id="refusals">0</span></div>
+            <div><span class="k">faults (window)</span><span class="v" id="fault-window">0</span></div>
+            <div><span class="k">transitions</span><span class="v" id="transitions">0</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================ BUS & DIAGNOSTICS -->
+    <section id="tab-bus" class="panel">
+      <div class="grid-2">
+        <div class="card" id="bus-card">
+          <div class="card-head"><h2>CAN-FD BUS</h2><span id="bus-sub" class="muted"></span></div>
+          <table class="data-table">
+            <thead><tr><th>frame id</th><th>message</th><th>domain</th><th>prio</th><th>dlc</th><th>crc8</th></tr></thead>
+            <tbody id="bus-frames"></tbody>
+          </table>
+          <div class="kv" id="bus-counters">
+            <div><span class="k">sent</span><span class="v" id="bus-sent">0</span></div>
+            <div><span class="k">delivered</span><span class="v" id="bus-delivered">0</span></div>
+            <div><span class="k">crc dropped</span><span class="v" id="bus-crc">0</span></div>
+            <div><span class="k">overflow dropped</span><span class="v" id="bus-overflow">0</span></div>
+            <div><span class="k">in flight</span><span class="v" id="bus-inflight">0</span></div>
+          </div>
+        </div>
+
+        <div class="card" id="uds-card">
+          <div class="card-head"><h2>UDS DIAGNOSTICS</h2><span id="uds-session" class="muted">session: defaultSession</span></div>
+          <div class="btn-row">
+            <button class="btn uds-btn" data-uds='{"sid":"0x10","subFunction":"defaultSession"}' type="button">0x10 default</button>
+            <button class="btn uds-btn" data-uds='{"sid":"0x10","subFunction":"extendedDiagnosticSession"}' type="button">0x10 extended</button>
+            <button class="btn uds-btn" data-uds='{"sid":"0x19","subFunction":"reportNumberOfDTCsByStatusMask"}' type="button">0x19 DTC count</button>
+            <button class="btn uds-btn" data-uds='{"sid":"0x19","subFunction":"reportSupportedDTCs"}' type="button">0x19 DTC list</button>
+            <button class="btn uds-btn" data-uds='{"sid":"0x14"}' type="button">0x14 clear DTCs</button>
+          </div>
+          <div class="btn-row">
+            <select id="uds-did" class="select">
+              <option value="0xF100">0xF100 safetyState</option>
+              <option value="0xF101">0xF101 busStats</option>
+              <option value="0xF102">0xF102 ledgerConservation</option>
+              <option value="0xF103">0xF103 agentConsensus</option>
+              <option value="0xF104">0xF104 dtcSummary</option>
+            </select>
+            <button id="uds-read" class="btn" type="button">0x22 read DID</button>
+          </div>
+          <pre id="uds-log" class="console">UDS console ready…</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================== LEDGER -->
+    <section id="tab-ledger" class="panel">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h2>ACCOUNTS</h2><button id="refresh-accounts" class="btn" type="button">Refresh</button></div>
+          <table class="data-table">
+            <thead><tr><th>account</th><th>type</th><th>balance</th><th>ver</th></tr></thead>
+            <tbody id="account-body"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>TRANSFER</h2><span class="muted">amounts as decimal strings — floats rejected at the gate</span></div>
+          <form id="transfer-form">
+            <label>from
+              <select id="from-select" class="select" required></select>
+            </label>
+            <label>to
+              <select id="to-select" class="select" required></select>
+            </label>
+            <label>amount (e.g. "12.50")
+              <input id="amount" name="amount" class="input" placeholder='{"amount":"12.50"}' required />
+            </label>
+            <label>externalId
+              <input id="external-id" name="externalId" class="input" placeholder="demo-1" required />
+            </label>
+            <button class="btn primary" type="submit">Commit transfer</button>
+          </form>
+          <div class="btn-row">
+            <button id="storm-btn" class="btn" type="button">Batch storm ×10</button>
+            <span id="storm-note" class="muted"></span>
+          </div>
+          <div id="transfer-result" class="result"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>TRANSACTIONS</h2><button id="refresh-txns" class="btn" type="button">Refresh</button></div>
+        <table class="data-table">
+          <thead><tr><th>id</th><th>externalId</th><th>from → to</th><th>amount</th></tr></thead>
+          <tbody id="txn-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================================================== PAYMENTS -->
+    <section id="tab-payments" class="panel">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h2>PAYMENT LIFECYCLE</h2><span class="muted">authorize → capture | void → refund</span></div>
+          <form id="payment-form">
+            <label>customer
+              <select id="customer-select" class="select"></select>
+            </label>
+            <label>merchant
+              <select id="merchant-select" class="select"></select>
+            </label>
+            <label>amount
+              <input id="pay-amount" class="input" placeholder="49.99" required />
+            </label>
+            <label>externalId
+              <input id="pay-external" class="input" placeholder="demo-pay-1" required />
+            </label>
+            <button class="btn primary" type="submit">Authorize</button>
+          </form>
+          <div id="payment-result" class="result"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>PAYMENTS</h2><button id="refresh-payments" class="btn" type="button">Refresh</button></div>
+          <table class="data-table">
+            <thead><tr><th>id</th><th>status</th><th>amount</th><th>captured</th><th>ops</th></tr></thead>
+            <tbody id="pay-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================= TELEMETRY -->
+    <section id="tab-telemetry" class="panel">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h2>TRACE SPANS <span class="muted">(OTel-shaped)</span></h2><a class="btn" href="/telemetry/otlp" target="_blank" rel="noreferrer">raw OTLP/JSON</a></div>
+          <table class="data-table">
+            <thead><tr><th>span</th><th>status</th><th>duration</th></tr></thead>
+            <tbody id="span-body"></tbody>
+          </table>
+        </div>
+        <div class="card" id="stream-card">
+          <div class="card-head"><h2>LIVE STREAM</h2>
+            <span>
+              <span id="stream-live" class="dot live"></span>
+              <span id="stream-live-text" class="muted">connecting…</span>
+            </span>
+          </div>
+          <pre id="stream-console" class="console">waiting for events…</pre>
+          <div class="muted" id="stream-count">0 events</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================== AUDIT & LINT -->
+    <section id="tab-audit" class="panel">
+      <div class="card">
+        <div class="card-head audit-banner">
+          <h2>TAMPER-EVIDENT AUDIT CHAIN</h2>
+          <span><span id="audit-dot" class="dot"></span><span id="audit-text" class="muted">…</span>
+          <button id="refresh-audit" class="btn" type="button">Refresh</button></span>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>seq</th><th>at</th><th>type</th><th>payload</th></tr></thead>
+          <tbody id="audit-body"></tbody>
+        </table>
+      </div>
+      <div class="card" id="lint-card">
+        <div class="card-head"><h2>QUALITY GATE <span class="muted">(custom linter + conformance)</span></h2><span id="lint-status" class="muted">…</span></div>
+        <div id="lint-conformance" class="lint-grid"></div>
+        <pre id="lint-findings" class="console">no findings</pre>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>
