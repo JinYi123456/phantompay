@@ -1,7 +1,10 @@
 {
   "version": 2,
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/server.js" }
+  "rewrites": [
+    { "source": "/css/(.*)", "destination": "/css/$1" },
+    { "source": "/js/(.*)", "destination": "/js/$1" },
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/public/(.*)", "destination": "/public/$1" },
+    { "source": "/(.*)", "destination": "/server.js" }
   ]
 }
