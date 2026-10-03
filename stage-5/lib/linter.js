@@ -13,7 +13,8 @@
  *      code do not trip the gate.
  *
  *   2. CONFORMANCE RULES - dynamic checks that require the real modules
- *      and exercise behavior: CRC-8 must match the canonical check value,
+ *      (through a static require table so bundlers keep them) and exercise
+ *      behavior: CRC-8 must match the canonical check value,
  *      the money gate must reject 2.675, replay must return before the
  *      funds check, a batch must be all-or-nothing, the supervisor must
  *      escalate to SAFE_HALT and honor the recovery grace period, UDS must
@@ -28,9 +29,35 @@
 const fs = require('fs');
 const path = require('path');
 
+// ------------------------------------------------------------ module loading
+
+// Conformance rules load the real modules through this table. Static
+// requires keep every module inside bundler traces, so the gate runs
+// unchanged from a plain checkout AND from a bundled serverless deployment
+// (Vercel compiles server.js into a lambda where __dirname points at the
+// bundle, not the source tree).
+const CONFORMANCE_MODULES = {
+  crc: require('./crc'),
+  money: require('./money'),
+  ledger: require('./ledger'),
+  safety: require('./safety'),
+  agents: require('./agents'),
+  telemetry: require('./telemetry'),
+};
+
+/**
+ * Resolve a core module by name. Bundled deployments first, source
+ * checkout second — behavior is identical either way because the static
+ * table holds the very same module instances.
+ */
+function resolveModule(rootDir, name) {
+  if (CONFORMANCE_MODULES[name]) return CONFORMANCE_MODULES[name];
+  return require(path.join(rootDir, 'lib', name));
+}
+
 // ------------------------------------------------------------- file collect
 
-const SCAN_EXTENSIONS = new Set(['.js']);
+const SCAN_EXTENSIONS = new Set(['.js', '.cjs']);
 
 function collectFiles(rootDir, relDir = '') {
   const absolute = relDir ? path.join(rootDir, relDir) : rootDir;
@@ -52,7 +79,8 @@ function collectFiles(rootDir, relDir = '') {
 
 const inLib = (rel) => rel.startsWith('lib/');
 const inBin = (rel) => rel.startsWith('bin/');
-const isServer = (rel) => rel === 'server.js';
+// server.js in a checkout; server.cjs in a compiled serverless bundle.
+const isServer = (rel) => rel === 'server.js' || rel === 'server.cjs';
 const moneyScope = (rel) => inLib(rel) || inBin(rel);
 const coreScope = (rel) => moneyScope(rel) || isServer(rel);
 
@@ -159,7 +187,7 @@ const CONFORMANCE_RULES = [
     id: 'crc/crc8-check-value',
     description: 'CRC-8 (poly 0x07) must reproduce the canonical check value 0xF4 for "123456789"',
     run(rootDir) {
-      const { crc8 } = require(path.join(rootDir, 'lib', 'crc'));
+      const { crc8 } = resolveModule(rootDir, 'crc');
       const value = crc8('123456789');
       if (value !== 0xf4) return { ok: false, message: `crc8("123456789") = ${value}, expected 0xF4` };
       return { ok: true };
@@ -169,7 +197,7 @@ const CONFORMANCE_RULES = [
     id: 'crc/canonical-seal',
     description: 'CRC-8 sealing must be key-order independent (deterministic wire form)',
     run(rootDir) {
-      const { seal } = require(path.join(rootDir, 'lib', 'crc'));
+      const { seal } = resolveModule(rootDir, 'crc');
       const a = seal({ b: 2, a: 1, nested: { y: 1, x: 2 } });
       const b = seal({ a: 1, b: 2, nested: { x: 2, y: 1 } });
       if (a.crc8 !== b.crc8) return { ok: false, message: 'seal depends on object key order' };
@@ -180,7 +208,7 @@ const CONFORMANCE_RULES = [
     id: 'money/rejects-float-hazards',
     description: 'the money gate must reject fractional floats and accept exact decimal strings',
     run(rootDir) {
-      const { minorFromDecimal } = require(path.join(rootDir, 'lib', 'money'));
+      const { minorFromDecimal } = resolveModule(rootDir, 'money');
       const hazard = expectThrow(() => minorFromDecimal(2.675, 2), 'float_money');
       if (!hazard.ok) return hazard;
       const overflow = expectThrow(() => minorFromDecimal('2.675', 2), 'float_money');
@@ -194,7 +222,7 @@ const CONFORMANCE_RULES = [
     id: 'settlement/conservation-holds',
     description: 'the conservation watcher must prove sum(balances) equals the seed sum after commits',
     run(rootDir) {
-      const { Ledger } = require(path.join(rootDir, 'lib', 'ledger'));
+      const { Ledger } = resolveModule(rootDir, 'ledger');
       const clock = makeClock();
       const ledger = new Ledger({ clock: clock.iso });
       ledger.createAccount({ id: 'house:treasury', currency: 'USD', type: 'house', direction: 'credit' });
@@ -212,7 +240,7 @@ const CONFORMANCE_RULES = [
     id: 'settlement/idempotency-before-funds',
     description: 'replays must return the original transaction before any funds check (at-most-once)',
     run(rootDir) {
-      const { Ledger } = require(path.join(rootDir, 'lib', 'ledger'));
+      const { Ledger } = resolveModule(rootDir, 'ledger');
       const clock = makeClock();
       const ledger = new Ledger({ clock: clock.iso });
       ledger.createAccount({ id: 'house:treasury', currency: 'USD', type: 'house', direction: 'credit' });
@@ -234,7 +262,7 @@ const CONFORMANCE_RULES = [
     id: 'settlement/batch-all-or-nothing',
     description: 'a batch with one failing item must commit nothing (cumulative funds simulation)',
     run(rootDir) {
-      const { Ledger } = require(path.join(rootDir, 'lib', 'ledger'));
+      const { Ledger } = resolveModule(rootDir, 'ledger');
       const clock = makeClock();
       const ledger = new Ledger({ clock: clock.iso });
       ledger.createAccount({ id: 'house:treasury', currency: 'USD', type: 'house', direction: 'credit' });
@@ -263,7 +291,7 @@ const CONFORMANCE_RULES = [
     id: 'safety/halt-arc-complete',
     description: 'the ASIL-D arc table must be complete: NORMAL<->DEGRADED, *->SAFE_HALT, halt only via RECOVERING',
     run(rootDir) {
-      const { TRANSITIONS, STATES } = require(path.join(rootDir, 'lib', 'safety'));
+      const { TRANSITIONS, STATES } = resolveModule(rootDir, 'safety');
       const t = TRANSITIONS;
       if (!t.NORMAL.includes(STATES.DEGRADED) || !t.NORMAL.includes(STATES.SAFE_HALT)) {
         return { ok: false, message: 'NORMAL must reach DEGRADED and SAFE_HALT' };
@@ -284,7 +312,7 @@ const CONFORMANCE_RULES = [
     id: 'safety/escalation-to-halt',
     description: 'repeated degradable faults must escalate the machine into SAFE_HALT',
     run(rootDir) {
-      const { SafetySupervisor } = require(path.join(rootDir, 'lib', 'safety'));
+      const { SafetySupervisor } = resolveModule(rootDir, 'safety');
       const clock = makeClock();
       const supervisor = new SafetySupervisor({ clock: clock.iso, degradableLimit: 2 });
       supervisor.reportFault({ code: 'f1', severity: 'degradable' });
@@ -301,7 +329,7 @@ const CONFORMANCE_RULES = [
     id: 'safety/recovery-grace-period',
     description: 'recovery must require the warm-up grace period and clear non-critical faults',
     run(rootDir) {
-      const { SafetySupervisor, GRACE_MS } = require(path.join(rootDir, 'lib', 'safety'));
+      const { SafetySupervisor, GRACE_MS } = resolveModule(rootDir, 'safety');
       const clock = makeClock();
       const supervisor = new SafetySupervisor({ clock: clock.iso, degradableLimit: 1 });
       supervisor.reportFault({ code: 'f1', severity: 'degradable' });
@@ -319,7 +347,7 @@ const CONFORMANCE_RULES = [
     id: 'uds/session-guard',
     description: 'UDS clear-DTC must be refused outside the extended diagnostic session (NRC 0x7E)',
     run(rootDir) {
-      const { UdsServer, NRC } = require(path.join(rootDir, 'lib', 'safety'));
+      const { UdsServer, NRC } = resolveModule(rootDir, 'safety');
       const uds = new UdsServer({});
       const refused = uds.handle({ sid: '0x14' });
       if (refused.positive !== false || refused.nrc !== NRC.NOT_IN_SESSION.code) {
@@ -340,7 +368,7 @@ const CONFORMANCE_RULES = [
     id: 'agents/roster-complete',
     description: 'the verification council must contain exactly the four independent agents',
     run(rootDir) {
-      const { AGENTS } = require(path.join(rootDir, 'lib', 'agents'));
+      const { AGENTS } = resolveModule(rootDir, 'agents');
       const expected = ['conservation-sentinel', 'idempotency-auditor', 'frame-guardian', 'state-machine-sentinel'];
       const names = AGENTS.map((a) => a.name);
       for (const name of expected) {
@@ -354,9 +382,9 @@ const CONFORMANCE_RULES = [
     id: 'agents/pristine-round-unanimous',
     description: 'a verification round on a pristine system must be unanimous and never halt the machine',
     run(rootDir) {
-      const { Ledger } = require(path.join(rootDir, 'lib', 'ledger'));
-      const { SafetySupervisor } = require(path.join(rootDir, 'lib', 'safety'));
-      const { AgentCouncil } = require(path.join(rootDir, 'lib', 'agents'));
+      const { Ledger } = resolveModule(rootDir, 'ledger');
+      const { SafetySupervisor } = resolveModule(rootDir, 'safety');
+      const { AgentCouncil } = resolveModule(rootDir, 'agents');
       const clock = makeClock();
       const ledger = new Ledger({ clock: clock.iso });
       const supervisor = new SafetySupervisor({ clock: clock.iso });
@@ -374,7 +402,7 @@ const CONFORMANCE_RULES = [
     id: 'telemetry/otlp-shape',
     description: 'the tracer must emit real W3C context and an OTLP/JSON resourceSpans export',
     run(rootDir) {
-      const { Tracer } = require(path.join(rootDir, 'lib', 'telemetry'));
+      const { Tracer } = resolveModule(rootDir, 'telemetry');
       const tracer = new Tracer({});
       const wrapped = tracer.span('lint.check', () => 'ok', { attributes: { gate: 'lint' } });
       const span = wrapped.span;
@@ -407,8 +435,9 @@ function runLint(rootDir, { files } = {}) {
     for (const [rel, source] of sources) {
       // Bootstrap exemption: this file's conformance rules deliberately
       // contain float literals (to prove the gate rejects them), so it is
-      // not hygiene-scanned against itself.
-      if (rel === 'lib/linter.js') continue;
+      // not hygiene-scanned against itself (.cjs = compiled bundle form).
+      const base = rel.slice(rel.lastIndexOf('/') + 1);
+      if (base === 'linter.js' || base === 'linter.cjs') continue;
       if (!rule.scope(rel)) continue;
       source.lines.forEach((line, index) => {
         const match = rule.pattern.exec(line);
@@ -469,4 +498,4 @@ function runLint(rootDir, { files } = {}) {
   };
 }
 
-module.exports = { runLint, collectFiles, HYGIENE_RULES, CONFORMANCE_RULES };
+module.exports = { runLint, collectFiles, resolveModule, CONFORMANCE_MODULES, HYGIENE_RULES, CONFORMANCE_RULES };

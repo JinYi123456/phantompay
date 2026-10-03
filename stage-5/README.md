@@ -276,12 +276,32 @@ stage-5/
 └── package.json           zero dependencies; test / lint / start
 ```
 
+## Deploying to Vercel
+
+Stage 5 is a plain `http.createServer` app, so it deploys to Vercel as a
+single serverless function: the project's **Root Directory** is `stage-5`,
+`server.js` is the entrypoint, and `vercel.json` routes everything to it.
+`module.exports = server` is the function handler Vercel invokes per request;
+when required as a module (tests, tooling), the same file also exports the
+named internals `{ server, engine, supervisor, bus, payments, audit, metrics,
+uds, startTicker }`.
+
+The quality gate runs on Vercel too. The linter's conformance rules load the
+core modules through a **static require table** (`CONFORMANCE_MODULES`) so
+bundlers keep them in the trace — the historical failure mode was Vercel's
+nft compiler missing the dynamic `require(path.join(rootDir, 'lib', ...))`
+calls and the lambda crashing every rule with
+`Cannot find module '/var/task/stage-5/lib/crc'`.
+`GET /lint?fresh=1` recomputes all 13 conformance rules per request and must
+report `"ok": true` in every environment.
+
 ## Verification evidence
 
 | Gate | Result |
 |---|---|
 | `npm test` (stage-5) | **77/77 pass** |
 | `npm run lint` | **0 errors, 13/13 conformance** |
+| `GET /lint?fresh=1` on Vercel | **0 errors, 13/13 conformance (all green)** |
 | Stages 1–4 regression | **30+31+53+76 all pass (190)** |
 | Boot check | safety NORMAL, conservation proven, audit chain valid |
 

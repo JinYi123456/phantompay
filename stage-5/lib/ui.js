@@ -22,10 +22,18 @@ const MIME = {
 const cache = null; // assets are tiny; read from disk on every request so edits are live
 
 function readAsset(name) {
-  const resolved = path.normalize(path.join(ASSETS_DIR, name));
-  if (!resolved.startsWith(ASSETS_DIR + path.sep) && resolved !== ASSETS_DIR) return null;
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) return null;
-  return fs.readFileSync(resolved);
+  const candidates = [name];
+  // Serverless bundles may rename assets from .js/.css to .cjs (nft's trace
+  // of the literal fs reads); try the original names when that happened.
+  if (name.endsWith('.js')) candidates.push(`${name.slice(0, -3)}.cjs`);
+  else if (name.endsWith('.css')) candidates.push(`${name.slice(0, -4)}.cjs`);
+  for (const candidate of candidates) {
+    const resolved = path.normalize(path.join(ASSETS_DIR, candidate));
+    if (!resolved.startsWith(ASSETS_DIR + path.sep) && resolved !== ASSETS_DIR) return null;
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) continue;
+    return fs.readFileSync(resolved);
+  }
+  return null;
 }
 
 /**

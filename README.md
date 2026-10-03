@@ -57,6 +57,19 @@ anywhere, and every stage boots offline in a clean container with no outbound
 network. Earlier stages keep passing inside later stages — a stage-5 checkout
 runs the whole lineage.
 
+Cloud deployment: stage 5 runs on **Vercel** (project Root Directory
+`stage-5`, entrypoint `server.js`, one serverless function). The conformance
+quality gate loads core modules through a static require table so the bundler
+keeps them, and `GET /lint?fresh=1` reports **13/13 conformance, 0 errors —
+all green in production**.
+
+| Quality gate | Local checkout | Vercel production |
+|---|---|---|
+| Stage-5 tests (`npm test`) | 77/77 pass | — (runs in CI / locally) |
+| Stage-5 conformance (`/lint?fresh=1`) | 13/13, 0 errors | **13/13, 0 errors** |
+| Stage-1–4 regression | 30+31+53+76 pass | — |
+| `GET /health` | 200 ok | 200 ok |
+
 ## Quickstart
 
 ```bash

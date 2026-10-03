@@ -558,14 +558,22 @@ if (require.main === module) {
 }
 
 // ---------------------------------------------------------------------------
-// Server & Export for Vercel
+// Vercel serverless export: the native http server is the request handler.
+// Vercel compiles this entrypoint (server.js -> server.cjs) and invokes it
+// per request; `require.main === module` is false there, so no listener and
+// no ticker are started. Locally this file stays a normal `npm start` server.
 // ---------------------------------------------------------------------------
-if (require.main === module) {
-  startTicker();
-  server.listen(PORT, HOST, () => {
-    console.log(`[phantom-pay] stage 5 listening on http://${HOST}:${PORT} (safety tick ${TICK_MS}ms)`);
-  });
-}
-
-// 兼容 Vercel Serverless：直接将原生的 http.createServer 实例导出
 module.exports = server;
+// Named exports: tests and tooling destructure `{ server, engine, ... }`;
+// Vercel serverless uses the default export (the http.Server itself) as the
+// request handler. Attaching properties to the server instance satisfies
+// both consumers from one module.
+module.exports.server = server;
+module.exports.engine = engine;
+module.exports.supervisor = supervisor;
+module.exports.bus = bus;
+module.exports.payments = payments;
+module.exports.audit = audit;
+module.exports.metrics = metrics;
+module.exports.uds = uds;
+module.exports.startTicker = startTicker;
