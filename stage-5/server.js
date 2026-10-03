@@ -557,4 +557,15 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, engine, supervisor, bus, council, uds, payments, audit, tracer, startTicker };
+// ---------------------------------------------------------------------------
+// Server & Export for Vercel
+// ---------------------------------------------------------------------------
+if (require.main === module) {
+  startTicker();
+  server.listen(PORT, HOST, () => {
+    console.log(`[phantom-pay] stage 5 listening on http://${HOST}:${PORT} (safety tick ${TICK_MS}ms)`);
+  });
+}
+
+// 兼容 Vercel Serverless：直接将原生的 http.createServer 实例导出
+module.exports = server;
