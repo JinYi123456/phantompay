@@ -5,5 +5,8 @@
       "src": "stage-5/server.js",
       "use": "@vercel/node"
     }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "stage-5/server.js" }
   ]
 }
