@@ -1,10 +1,6 @@
 {
   "version": 2,
-  "rewrites": [
-    { "source": "/css/(.*)", "destination": "/css/$1" },
-    { "source": "/js/(.*)", "destination": "/js/$1" },
-    { "source": "/assets/(.*)", "destination": "/assets/$1" },
-    { "source": "/public/(.*)", "destination": "/public/$1" },
-    { "source": "/(.*)", "destination": "/server.js" }
+  "routes": [
+    { "src": "/(.*)", "dest": "/server.js" }
   ]
 }
