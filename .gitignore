@@ -6,3 +6,4 @@ node_modules/
 .freebuff/
 agent_config.yaml
 .workbuddy-ai/
+.vercel
