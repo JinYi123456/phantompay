@@ -14,7 +14,7 @@ async def run_single_agent(config_key: str):
     # 接入你的 GonkaRouter 网关和大模型配置
     adapter = LangGraphAdapter(
         llm=ChatOpenAI(
-            model="zai-org/GLM-5.3-Flash",  # 或者用你的 deepseek-ai/DeepSeek-V4-Flash-0731
+            model="deepseek-ai/DeepSeek-V4-Flash-0731",  # 或者用你的 deepseek-ai/DeepSeek-V4-Flash-0731
             base_url="https://api.gonkarouter.io/v1",
             api_key=os.getenv("GONKAROUTER_API_KEY")
         ),
